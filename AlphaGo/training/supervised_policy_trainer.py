@@ -62,12 +62,12 @@ def shuffled_hdf5_batch_generator(state_dataset, action_dataset,
         for data_idx in indices:
             # get rotation symmetry belonging to state
             transform = BOARD_TRANSFORMATIONS[data_idx[1]]
-            
+
             # get state from dataset and transform it.
             # loop comprehension is used so that the transformation acts on the
             # 3rd and 4th dimensions
             state = np.array([transform(plane) for plane in state_dataset[data_idx[0]]])
-            
+
             # must be cast to a tuple so that it is interpreted as (x,y) not [(x,:), (y,:)]
             action_xy = tuple(action_dataset[data_idx[0]])
             action = transform(one_hot_action(action_xy, game_size))
@@ -119,7 +119,7 @@ class LrDecayCallback(Callback):
     def set_lr(self):
         # calculate learning rate
         batch = self.model.optimizer.current_batch
-        new_lr =  self.learning_rate * (1. / (1. + self.decay * batch))
+        new_lr = self.learning_rate * (1. / (1. + self.decay * batch))
 
         # set new learning rate
         self.model.optimizer.lr = K.variable(value=new_lr)
@@ -190,7 +190,7 @@ class MetadataWriterCallback(Callback):
         self.metadata = {
             "epoch_logs": [],
             "current_batch": 0,
-            "current_epoch":0,
+            "current_epoch": 0,
             "best_epoch": 0
         }
 
@@ -352,10 +352,10 @@ def load_train_val_test_indices(verbose, arg_symmetries, dataset_length, batch_s
         symmetries = [TRANSFORMATION_INDICES["noop"]]
     else:
         # add specified symmetries
-        symmetries = [TRANSFORMATION_INDICES[name] for name in args.symmetries.strip().split(",")]
+        symmetries = [TRANSFORMATION_INDICES[name] for name in arg_symmetries.strip().split(",")]
 
     if verbose:
-            print("Used symmetries: " + args.symmetries)
+        print("Used symmetries: " + arg_symmetries)
 
     # remove symmetries not used during current run
     if len(symmetries) != len(TRANSFORMATION_INDICES):
@@ -393,7 +393,7 @@ def set_training_settings(resume, args, metadata, dataset_length):
     shuffle_file_train = os.path.join(args.out_directory, "shuffle_train.npz")
     shuffle_file_val = os.path.join(args.out_directory, "shuffle_validate.npz")
     shuffle_file_test = os.path.join(args.out_directory, "shuffle_test.npz")
-    
+
     # determine if new shuffle files have to be created
     save_new_shuffle_indices = not resume
 
@@ -404,31 +404,31 @@ def set_training_settings(resume, args, metadata, dataset_length):
             # TODO better explanation why this might be bad
             print("the model file is different from the model file used last run: " +
                   metadata["model_file"] + ". It might be different than the old one.")
-            if args.override or not confirm("Are you sure you want to use the new model?", False):
+            if args.override or not confirm("Are you sure you want to use the new model?", False):  # noqa: E501
                 raise ValueError("User abort after mismatch model files.")
 
         # check if decay_every is the same
         # TODO better explanation why this might be bad
         if args.decay_every is not None and metadata["decay_every"] != args.decay_every:
-            if args.override or confirm("Are you sure you want to use new decay every setting?", False):
+            if args.override or confirm("Are you sure you want to use new decay every setting?", False):  # noqa: E501
                 metadata["decay_every"] = args.decay_every
 
         # check if learning_rate is the same
         # TODO better explanation why this might be bad
         if args.learning_rate is not None and metadata["learning_rate"] != args.learning_rate:
-            if args.override or confirm("Are you sure you want to use new learning rate setting?", False):
+            if args.override or confirm("Are you sure you want to use new learning rate setting?", False):  # noqa: E501
                 metadata["learning_rate"] = args.learning_rate
 
         # check if decay is the same
         # TODO better explanation why this might be bad
         if args.decay is not None and metadata["decay"] != args.decay:
-            if args.override or confirm("Are you sure you want to use new decay setting?", False):
+            if args.override or confirm("Are you sure you want to use new decay setting?", False):  # noqa: E501
                 metadata["decay"] = args.decay
 
         # check if batch_size is the same
         # TODO better explanation why this might be bad
         if args.minibatch is not None and metadata["batch_size"] != args.minibatch:
-            if args.override or confirm("Are you sure you want to use new minibatch setting?", False):
+            if args.override or confirm("Are you sure you want to use new minibatch setting?", False):  # noqa: E501
                 metadata["batch_size"] = args.minibatch
 
         # check if max_validation is the same
@@ -436,7 +436,7 @@ def set_training_settings(resume, args, metadata, dataset_length):
         if args.max_validation is not None and metadata["max_validation"] != args.max_validation:
             print("Training set and validation set should be stricktly separated, setting a new fraction will generate a new validation set that might include data from the current traing set.")  # noqa: E501
             print("We reccommend you not to use the new max-validation setting.")
-            if args.override or confirm("Are you sure you want to use new max-validation setting?", False):
+            if args.override or confirm("Are you sure you want to use new max-validation setting?", False):  # noqa: E501
                 metadata["max_validation"] = args.max_validation
                 # new shuffle files have to be created
                 save_new_shuffle_indices = True
@@ -446,7 +446,7 @@ def set_training_settings(resume, args, metadata, dataset_length):
         if args.train_val_test is not None and metadata["train_val_test"] != args.train_val_test:
             print("Training set and validation set should be stricktly separated, setting a new fraction will generate a new validation set that might include data from the current traing set.")  # noqa: E501
             print("We reccommend you not to use the new fraction.")
-            if args.override or confirm("Are you sure you want to use new train-val-test fraction setting?", False):
+            if args.override or confirm("Are you sure you want to use new train-val-test fraction setting?", False):  # noqa: E501
                 metadata["train_val_test"] = args.train_val_test
                 # new shuffle files have to be created
                 save_new_shuffle_indices = True
@@ -507,7 +507,7 @@ def set_training_settings(resume, args, metadata, dataset_length):
         else:
             metadata["train_val_test"] = DEFAULT_TRAIN_VAL_TEST
 
-        # save epochs to metadata 
+        # save epochs to metadata
         if args.epochs is not None:
             metadata["epochs"] = args.epochs
         else:
@@ -524,7 +524,7 @@ def set_training_settings(resume, args, metadata, dataset_length):
     meta_args_data = metadata.get("cmd_line_args", [])
     meta_args_data.append(vars(args))
     metadata["cmd_line_args"] = meta_args_data
-    
+
     # create and save new shuffle indices if needed
     if save_new_shuffle_indices:
 
@@ -535,10 +535,10 @@ def set_training_settings(resume, args, metadata, dataset_length):
 
         # save total amount of states to metadata
         metadata["available_states"] = dataset_length
-        
+
         # save training data file name to metadata
         metadata["training_data"] = args.train_data
-        
+
         if args.verbose:
             print("created new data shuffling indices")
 
