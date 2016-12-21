@@ -8,11 +8,35 @@ from keras.callbacks import Callback
 from AlphaGo.models.policy import CNNPolicy
 from AlphaGo.preprocessing.preprocessing import Preprocess
 
+# default settings
 DEFAULT_MAX_VALIDATION = 1000000000
 DEFAULT_TRAIN_VAL_TEST = [.95, .05, .0]
 DEFAULT_LEARNING_RATE = 0.03
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_DECAY = .0001
+DEFAULT_EPOCH = 10
+
+TRANSFORMATION_INDICES = {
+    "noop": 0,
+    "rot90": 1,
+    "rot180": 2,
+    "rot270": 3,
+    "fliplr": 4,
+    "flipud": 5,
+    "diag1": 6,
+    "diag2": 7
+}
+
+BOARD_TRANSFORMATIONS = {
+    0: lambda feature: feature,
+    1: lambda feature: np.rot90(feature, 1),
+    2: lambda feature: np.rot90(feature, 2),
+    3: lambda feature: np.rot90(feature, 3),
+    4: lambda feature: np.fliplr(feature),
+    5: lambda feature: np.flipud(feature),
+    6: lambda feature: np.transpose(feature),
+    7: lambda feature: np.fliplr(np.rot90(feature, 1))
+}
 
 
 def one_hot_action(action, size=19):
@@ -24,7 +48,7 @@ def one_hot_action(action, size=19):
 
 
 def shuffled_hdf5_batch_generator(state_dataset, action_dataset,
-                                  indices, batch_size, transforms=[]):
+                                  indices, batch_size):
     """A generator of batches of training data for use with the fit_generator function
        of Keras. Data is accessed in the order of the given indices for shuffling.
     """
@@ -37,11 +61,13 @@ def shuffled_hdf5_batch_generator(state_dataset, action_dataset,
     while True:
         for data_idx in indices:
             # get rotation symmetry belonging to state
-            transform = transforms[data_idx[1]]
+            transform = BOARD_TRANSFORMATIONS[data_idx[1]]
+            
             # get state from dataset and transform it.
             # loop comprehension is used so that the transformation acts on the
             # 3rd and 4th dimensions
             state = np.array([transform(plane) for plane in state_dataset[data_idx[0]]])
+            
             # must be cast to a tuple so that it is interpreted as (x,y) not [(x,:), (y,:)]
             action_xy = tuple(action_dataset[data_idx[0]])
             action = transform(one_hot_action(action_xy, game_size))
@@ -83,7 +109,38 @@ def confirm(prompt=None, resp=False):
             return False
 
 
-class LrSchedulerCallback(Callback):
+class LrDecayCallback(Callback):
+
+    def __init__(self, learning_rate, decay):
+        super(Callback, self).__init__()
+        self.learning_rate = learning_rate
+        self.decay = decay
+
+    def set_lr(self):
+        # calculate learning rate
+        batch = self.model.optimizer.current_batch
+        new_lr =  self.learning_rate * (1. / (1. + self.decay * batch))
+
+        # set new learning rate
+        self.model.optimizer.lr = K.variable(value=new_lr)
+
+    def on_train_begin(self, logs={}):
+        # set initial learning rate
+        self.set_lr()
+
+    def on_batch_begin(self, batch, logs={}):
+        # using batch is not usefull as it starts at 0 every epoch
+
+        # set new learning rate
+        self.set_lr()
+
+        # increment current_batch
+        # increment current_batch in LrDecayCallback because order of activation
+        # can differ and incorrect current_batch would be used
+        self.model.optimizer.current_batch += 1
+
+
+class LrStepDecayCallback(Callback):
 
     def __init__(self, learning_rate, decay_every, decay, verbose):
         super(Callback, self).__init__()
@@ -131,8 +188,9 @@ class MetadataWriterCallback(Callback):
         self.file = path
         self.root = root
         self.metadata = {
-            "epochs": [],
+            "epoch_logs": [],
             "current_batch": 0,
+            "current_epoch":0,
             "best_epoch": 0
         }
 
@@ -142,19 +200,21 @@ class MetadataWriterCallback(Callback):
 
     def on_epoch_end(self, epoch, logs={}):
         # in case appending to logs (resuming training), get epoch number ourselves
-        epoch = len(self.metadata["epochs"])
+        epoch = len(self.metadata["epoch_logs"])
 
-        self.metadata["epochs"].append(logs)
-        # save current_batch to metadata even though it is only used with
-        # step decay learning rate
+        # append log to metadata
+        self.metadata["epoch_logs"].append(logs)
+        # save current_batch to metadata
         self.metadata["current_batch"] = self.model.optimizer.current_batch
+        # save current epoch
+        self.metadata["current_epoch"] = epoch
 
         if "val_loss" in logs:
             key = "val_loss"
         else:
             key = "loss"
 
-        best_loss = self.metadata["epochs"][self.metadata["best_epoch"]][key]
+        best_loss = self.metadata["epoch_logs"][self.metadata["best_epoch"]][key]
         if logs.get(key) < best_loss:
             self.metadata["best_epoch"] = epoch
 
@@ -165,98 +225,6 @@ class MetadataWriterCallback(Callback):
         # save model to file with correct epoch
         save_file = os.path.join(self.root, "weights.{epoch:05d}.hdf5".format(epoch=epoch))
         self.model.save(save_file)
-
-
-TRANSFORMATION_INDICES = {
-    "noop": 0,
-    "rot90": 1,
-    "rot180": 2,
-    "rot270": 3,
-    "fliplr": 4,
-    "flipud": 5,
-    "diag1": 6,
-    "diag2": 7
-}
-
-BOARD_TRANSFORMATIONS = {
-    0: lambda feature: feature,
-    1: lambda feature: np.rot90(feature, 1),
-    2: lambda feature: np.rot90(feature, 2),
-    3: lambda feature: np.rot90(feature, 3),
-    4: lambda feature: np.fliplr(feature),
-    5: lambda feature: np.flipud(feature),
-    6: lambda feature: np.transpose(feature),
-    7: lambda feature: np.fliplr(np.rot90(feature, 1))
-}
-
-
-def set_training_settings(resume, args, metadata):
-
-    if resume:
-        # check if argument model and meta model are the same
-        if metadata["model_file"] != args.model:
-            # verify if user really wants to use new model file
-            # TODO better explanation why this might be bad
-            print("the model file is different from the model file used last run: " +
-                  metadata["model_file"] + ". It might be different than the old one.")
-            if not confirm("Are you sure you want to use the new model?", False):
-                raise ValueError("User abort after mismatch model files.")
-
-        # check if decay_every is the same
-        # TODO better explanation why this might be bad
-        if args.decay_every is not None and metadata["decay_every"] != args.decay_every:
-            if confirm("Are you sure you want to use new decay every setting?", False):
-                metadata["decay_every"] = args.decay_every
-
-        # check if learning_rate is the same
-        # TODO better explanation why this might be bad
-        if args.learning_rate is not None and metadata["learning_rate"] != args.learning_rate:
-            if confirm("Are you sure you want to use new learning rate setting?", False):
-                metadata["learning_rate"] = args.learning_rate
-
-        # check if decay is the same
-        # TODO better explanation why this might be bad
-        if args.decay is not None and metadata["decay"] != args.decay:
-            if confirm("Are you sure you want to use new decay setting?", False):
-                metadata["decay"] = args.decay
-
-        # check if batch_size is the same
-        # TODO better explanation why this might be bad
-        if args.minibatch is not None and metadata["batch_size"] != args.minibatch:
-            if confirm("Are you sure you want to use new minibatch setting?", False):
-                metadata["batch_size"] = args.minibatch
-    else:
-        # save all argument or default settings to metadata
-
-        # save used model file to metadata
-        metadata["model_file"] = args.model
-
-        # save decay_every to metadata
-        metadata["decay_every"] = args.decay_every
-
-        # save learning_rate to metadata
-        if args.learning_rate is not None:
-            metadata["learning_rate"] = args.learning_rate
-        else:
-            metadata["learning_rate"] = DEFAULT_LEARNING_RATE
-
-        # save decay to metadata
-        if args.decay is not None:
-            metadata["decay"] = args.decay
-        else:
-            metadata["decay"] = DEFAULT_DECAY
-
-        # save batch_size to metadata
-        if args.decay is not None:
-            metadata["batch_size"] = args.minibatch
-        else:
-            metadata["batch_size"] = DEFAULT_BATCH_SIZE
-
-    # Record all command line args in a list so that all args are recorded even
-    # when training is stopped and resumed.
-    meta_args_data = metadata.get("cmd_line_args", [])
-    meta_args_data.append(vars(args))
-    metadata["cmd_line_args"] = meta_args_data
 
 
 def validate_feature_planes(verbose, dataset, model_features):
@@ -315,12 +283,14 @@ def remove_unused_symmetries(indices, symmetries):
 
 
 def create_and_save_shuffle_indices(train_val_test, max_validation,
-                                    n_total_data_size, symmetries, shuffle_file_train,
+                                    n_total_data_size, shuffle_file_train,
                                     shuffle_file_val, shuffle_file_test):
     """ create an array with all unique state and symmetry pairs,
         calculate test/validation/training set sizes,
         seperate those sets and save them to seperate files.
     """
+
+    symmetries = TRANSFORMATION_INDICES.values()
 
     # Create an array with a unique row for each combination of a training example
     # and a symmetry.
@@ -361,117 +331,49 @@ def create_and_save_shuffle_indices(train_val_test, max_validation,
                                    n_train_data + n_val_data + n_test_data]
     save_indices_to_file(shuffle_file_test, test_indices)
 
-    # return train/validation/test sets
-    return train_indices, val_indices, test_indices
 
-
-def get_train_val_test_indices(args, meta_writer, resume, dataset):
-
-    # all symmetries
-    all_symmetries = [TRANSFORMATION_INDICES[name] for name in TRANSFORMATION_INDICES]
-
-    # check if user argument has changed fraction and prompt for confirmation
-    correct_fraction = True
-
-    # check if train-val-test argument was set
-    train_val_test = args.train_val_test
-    if train_val_test is not None:
-        # check if train_val_test has changed and resume
-        if resume and train_val_test != meta_writer.metadata["train_val_test"]:
-            correct_fraction = False
-    else:
-        # set default
-        train_val_test = DEFAULT_TRAIN_VAL_TEST
-
-    # check if max-validation argument was set
-    max_validation = args.max_validation
-    if max_validation is not None:
-        # check if max-validation has changed and resume
-        if resume and max_validation != meta_writer.metadata["max_validation"]:
-            correct_fraction = False
-    else:
-        # set default
-        max_validation = DEFAULT_MAX_VALIDATION
-
-    # prompt user for confirmation to use new fraction
-    if not correct_fraction:
-        # train_val_test or max_validation not the same
-        # ask user to confirm new usage
-        # TODO better text explaining what is wrong with changing fraction
-        print("Training set and validation set should be stricktly separated, setting a new fraction will generate a new validation set that might include data from the current traing set.")  # noqa: E501
-        print("We reccommend you not to use the new fraction.")
-        correct_fraction = not confirm("Are you sure you want to use the new fraction?", False)  # noqa: E501
-
+def load_train_val_test_indices(verbose, arg_symmetries, dataset_length, batch_size, directory):
     # shuffle file locations for train/validation/test set
-    shuffle_file_train = os.path.join(args.out_directory, "shuffle_train.npz")
-    shuffle_file_val = os.path.join(args.out_directory, "shuffle_validate.npz")
-    shuffle_file_test = os.path.join(args.out_directory, "shuffle_test.npz")
+    shuffle_file_train = os.path.join(directory, "shuffle_train.npz")
+    shuffle_file_val = os.path.join(directory, "shuffle_validate.npz")
+    shuffle_file_test = os.path.join(directory, "shuffle_test.npz")
 
-    # check train/validation/test shuffle file existence, resume,
-    # train_data file is the same, amount of states is equal and
-    # fraction is the same
-    if resume and os.path.exists(shuffle_file_train) and os.path.exists(shuffle_file_val) and \
-       os.path.exists(shuffle_file_test) and correct_fraction and \
-       meta_writer.metadata["training_data"] == args.train_data and \
-       meta_writer.metadata["available_states"] == len(dataset["states"]):
-        # load from .npz files
-        train_indices = load_indices_from_file(shuffle_file_train)
-        val_indices = load_indices_from_file(shuffle_file_val)
-        test_indices = load_indices_from_file(shuffle_file_test)
-
-        if args.verbose:
-            print("loading previous data shuffling indices")
-    else:
-        # generate a list with all possible symmetry, state combinations
-        # divide them correctly over train/val/test set and save them to
-        # seperate files
-        train_indices, val_indices, test_indices = create_and_save_shuffle_indices(
-                train_val_test, max_validation, len(dataset["states"]),
-                all_symmetries, shuffle_file_train, shuffle_file_val, shuffle_file_test)
-
-        # save amount of states to metadata
-        meta_writer.metadata["available_states"] = len(dataset["states"])
-        # save training data file name to metadata
-        meta_writer.metadata["training_data"] = args.train_data
-        # save train/val/test fraction to metadata
-        meta_writer.metadata["train_val_test"] = train_val_test
-        # save train/val/test fraction to metadata
-        meta_writer.metadata["max_validation"] = max_validation
-
-        if args.verbose:
-            print("created new data shuffling indices")
+    # load from .npz files
+    train_indices = load_indices_from_file(shuffle_file_train)
+    val_indices = load_indices_from_file(shuffle_file_val)
+    test_indices = load_indices_from_file(shuffle_file_test)
 
     # used symmetries
-    if args.symmetries == "all":
+    if arg_symmetries == "all":
         # add all symmetries
-        symmetries = all_symmetries
-    elif args.symmetries == "none":
+        symmetries = TRANSFORMATION_INDICES.values()
+    elif arg_symmetries == "none":
         # only add standart orientation
         symmetries = [TRANSFORMATION_INDICES["noop"]]
     else:
         # add specified symmetries
         symmetries = [TRANSFORMATION_INDICES[name] for name in args.symmetries.strip().split(",")]
 
-    if args.verbose:
+    if verbose:
             print("Used symmetries: " + args.symmetries)
 
     # remove symmetries not used during current run
-    if len(symmetries) != len(all_symmetries):
+    if len(symmetries) != len(TRANSFORMATION_INDICES):
         train_indices = remove_unused_symmetries(train_indices, symmetries)
         test_indices = remove_unused_symmetries(test_indices, symmetries)
         val_indices = remove_unused_symmetries(val_indices, symmetries)
 
     # Need to make sure training data is dividable by minibatch size or get
     # warning mentioning accuracy from keras
-    if len(train_indices) % meta_writer.metadata["batch_size"] != 0:
+    if len(train_indices) % batch_size != 0:
         # remove first len(train_indices) % args.minibatch rows
         train_indices = np.delete(train_indices, [row for row in range(len(train_indices)
-                                                  % meta_writer.metadata["batch_size"])], 0)
+                                                  % batch_size)], 0)
 
-    if args.verbose:
+    if verbose:
         print("dataset loaded")
-        print("\t%d total positions" % len(dataset["states"]))
-        print("\t%d total samples" % (len(dataset["states"]) * len(symmetries)))
+        print("\t%d total positions" % dataset_length)
+        print("\t%d total samples" % (dataset_length * len(symmetries)))
         print("\t%d total samples check" % (len(train_indices) +
               len(val_indices) + len(test_indices)))
         print("\t%d training samples" % len(train_indices))
@@ -479,6 +381,166 @@ def get_train_val_test_indices(args, meta_writer, resume, dataset):
         print("\t%d test samples" % len(test_indices))
 
     return train_indices, val_indices, test_indices
+
+
+def set_training_settings(resume, args, metadata, dataset_length):
+    """ save all args to metadata,
+        check if critical settings have been changed and prompt user about it.
+        create new shuffle files if needed.
+    """
+
+    # shuffle file locations for train/validation/test set
+    shuffle_file_train = os.path.join(args.out_directory, "shuffle_train.npz")
+    shuffle_file_val = os.path.join(args.out_directory, "shuffle_validate.npz")
+    shuffle_file_test = os.path.join(args.out_directory, "shuffle_test.npz")
+    
+    # determine if new shuffle files have to be created
+    save_new_shuffle_indices = not resume
+
+    if resume:
+        # check if argument model and meta model are the same
+        if metadata["model_file"] != args.model:
+            # verify if user really wants to use new model file
+            # TODO better explanation why this might be bad
+            print("the model file is different from the model file used last run: " +
+                  metadata["model_file"] + ". It might be different than the old one.")
+            if args.override or not confirm("Are you sure you want to use the new model?", False):
+                raise ValueError("User abort after mismatch model files.")
+
+        # check if decay_every is the same
+        # TODO better explanation why this might be bad
+        if args.decay_every is not None and metadata["decay_every"] != args.decay_every:
+            if args.override or confirm("Are you sure you want to use new decay every setting?", False):
+                metadata["decay_every"] = args.decay_every
+
+        # check if learning_rate is the same
+        # TODO better explanation why this might be bad
+        if args.learning_rate is not None and metadata["learning_rate"] != args.learning_rate:
+            if args.override or confirm("Are you sure you want to use new learning rate setting?", False):
+                metadata["learning_rate"] = args.learning_rate
+
+        # check if decay is the same
+        # TODO better explanation why this might be bad
+        if args.decay is not None and metadata["decay"] != args.decay:
+            if args.override or confirm("Are you sure you want to use new decay setting?", False):
+                metadata["decay"] = args.decay
+
+        # check if batch_size is the same
+        # TODO better explanation why this might be bad
+        if args.minibatch is not None and metadata["batch_size"] != args.minibatch:
+            if args.override or confirm("Are you sure you want to use new minibatch setting?", False):
+                metadata["batch_size"] = args.minibatch
+
+        # check if max_validation is the same
+        # TODO better explanation why this might be bad
+        if args.max_validation is not None and metadata["max_validation"] != args.max_validation:
+            print("Training set and validation set should be stricktly separated, setting a new fraction will generate a new validation set that might include data from the current traing set.")  # noqa: E501
+            print("We reccommend you not to use the new max-validation setting.")
+            if args.override or confirm("Are you sure you want to use new max-validation setting?", False):
+                metadata["max_validation"] = args.max_validation
+                # new shuffle files have to be created
+                save_new_shuffle_indices = True
+
+        # check if train_val_test is the same
+        # TODO better explanation why this might be bad
+        if args.train_val_test is not None and metadata["train_val_test"] != args.train_val_test:
+            print("Training set and validation set should be stricktly separated, setting a new fraction will generate a new validation set that might include data from the current traing set.")  # noqa: E501
+            print("We reccommend you not to use the new fraction.")
+            if args.override or confirm("Are you sure you want to use new train-val-test fraction setting?", False):
+                metadata["train_val_test"] = args.train_val_test
+                # new shuffle files have to be created
+                save_new_shuffle_indices = True
+
+        # check if epochs is the same
+        if args.epochs is not None and metadata["epochs"] != args.epochs:
+            metadata["epochs"] = args.epochs
+
+        # check if epoch_length is the same
+        if args.epoch_length is not None and metadata["epoch_length"] != args.epoch_length:
+            metadata["epoch_length"] = args.epoch_length
+
+        # check if shuffle files exist and data file is the same
+        if not os.path.exists(shuffle_file_train) or not os.path.exists(shuffle_file_val) or \
+           not os.path.exists(shuffle_file_test) or \
+           metadata["training_data"] != args.train_data or \
+           metadata["available_states"] != dataset_length:
+            # shuffle files do not exist or training data file has changed
+            # TODO better explanation why this might be bad
+            print("WARNING! shuffle files have to be recreated.")
+            save_new_shuffle_indices = True
+    else:
+        # save all argument or default settings to metadata
+
+        # save used model file to metadata
+        metadata["model_file"] = args.model
+
+        # save decay_every to metadata
+        metadata["decay_every"] = args.decay_every
+
+        # save learning_rate to metadata
+        if args.learning_rate is not None:
+            metadata["learning_rate"] = args.learning_rate
+        else:
+            metadata["learning_rate"] = DEFAULT_LEARNING_RATE
+
+        # save decay to metadata
+        if args.decay is not None:
+            metadata["decay"] = args.decay
+        else:
+            metadata["decay"] = DEFAULT_DECAY
+
+        # save batch_size to metadata
+        if args.minibatch is not None:
+            metadata["batch_size"] = args.minibatch
+        else:
+            metadata["batch_size"] = DEFAULT_BATCH_SIZE
+
+        # save max_validation to metadata
+        if args.max_validation is not None:
+            metadata["max_validation"] = args.max_validation
+        else:
+            metadata["max_validation"] = DEFAULT_MAX_VALIDATION
+
+        # save train_val_test to metadata
+        if args.train_val_test is not None:
+            metadata["train_val_test"] = args.train_val_test
+        else:
+            metadata["train_val_test"] = DEFAULT_TRAIN_VAL_TEST
+
+        # save epochs to metadata 
+        if args.epochs is not None:
+            metadata["epochs"] = args.epochs
+        else:
+            metadata["epochs"] = DEFAULT_EPOCH
+
+        # save epoch_length to metadata
+        if args.epoch_length is not None:
+            metadata["epoch_length"] = args.epoch_length
+        else:
+            metadata["epoch_length"] = dataset_length
+
+    # Record all command line args in a list so that all args are recorded even
+    # when training is stopped and resumed.
+    meta_args_data = metadata.get("cmd_line_args", [])
+    meta_args_data.append(vars(args))
+    metadata["cmd_line_args"] = meta_args_data
+    
+    # create and save new shuffle indices if needed
+    if save_new_shuffle_indices:
+
+        # create and save new shuffle indices to file
+        create_and_save_shuffle_indices(
+                metadata["train_val_test"], metadata["max_validation"], dataset_length,
+                shuffle_file_train, shuffle_file_val, shuffle_file_test)
+
+        # save total amount of states to metadata
+        metadata["available_states"] = dataset_length
+        
+        # save training data file name to metadata
+        metadata["training_data"] = args.train_data
+        
+        if args.verbose:
+            print("created new data shuffling indices")
 
 
 def run_training(cmd_line_args=None):
@@ -491,18 +553,19 @@ def run_training(cmd_line_args=None):
     parser.add_argument("train_data", help="A .h5 file of training data")
     parser.add_argument("out_directory", help="directory where metadata and weights will be saved")
     # frequently used args
-    parser.add_argument("--minibatch", "-B", help="Size of training data minibatches. Default: 16", type=int, default=None)  # noqa: E501
-    parser.add_argument("--epochs", "-E", help="Total number of iterations on the data. Default: 10", type=int, default=10)  # noqa: E501
+    parser.add_argument("--minibatch", "-B", help="Size of training data minibatches. Default: " + str(DEFAULT_BATCH_SIZE), type=int, default=None)  # noqa: E501
+    parser.add_argument("--epochs", "-E", help="Total number of iterations on the data. Default: " + str(DEFAULT_EPOCH), type=int, default=None)  # noqa: E501
     parser.add_argument("--epoch-length", "-l", help="Number of training examples considered 'one epoch'. Default: # training data", type=int, default=None)  # noqa: E501
-    parser.add_argument("--learning-rate", "-r", help="Learning rate - how quickly the model learns at first. Default: .003", type=float, default=None)  # noqa: E501
-    parser.add_argument("--decay", "-d", help="The rate at which learning decreases. Default: .0001", type=float, default=None)  # noqa: E501
+    parser.add_argument("--learning-rate", "-r", help="Learning rate - how quickly the model learns at first. Default: " + str(DEFAULT_LEARNING_RATE), type=float, default=None)  # noqa: E501
+    parser.add_argument("--decay", "-d", help="The rate at which learning decreases. Default: " + str(DEFAULT_DECAY), type=float, default=None)  # noqa: E501
     # TODO better explanation
     parser.add_argument("--decay-every", "-de", help="Use step-decay: decay --learning-rate with --decay every --decay-every batches. Default: None", type=int, default=None)  # noqa: E501
     parser.add_argument("--verbose", "-v", help="Turn on verbose mode", default=False, action="store_true")  # noqa: E501
+    parser.add_argument("--override", help="Turn on prompt override mode", default=False, action="store_true")  # noqa: E501
     # slightly fancier args
     parser.add_argument("--weights", help="Name of a .h5 weights file (in the output directory) to load to resume training", default=None)  # noqa: E501
-    parser.add_argument("--train-val-test", help="Fraction of data to use for training/val/test. Must sum to 1. Default: [.95, .05, .0]", nargs=3, type=float, default=None)  # noqa: E501
-    parser.add_argument("--max-validation", help="maximum validation set size. default: 100000000", type=int, default=None)  # noqa: E501
+    parser.add_argument("--train-val-test", help="Fraction of data to use for training/val/test. Must sum to 1. Default: " + str(DEFAULT_TRAIN_VAL_TEST), nargs=3, type=float, default=None)  # noqa: E501
+    parser.add_argument("--max-validation", help="maximum validation set size. default: " + str(DEFAULT_MAX_VALIDATION), type=int, default=None)  # noqa: E501
     parser.add_argument("--symmetries", help="none, all or comma-separated list of transforms, subset of: noop,rot90,rot180,rot270,fliplr,flipud,diag1,diag2. Default: all", default='all')  # noqa: E501
 
     # show help or parse arguments
@@ -545,7 +608,7 @@ def run_training(cmd_line_args=None):
 
     # create metadata file and the callback object that will write to it
     # and saves model  at the same time
-    # the MetadataWriterCallback only sets 'epoch', 'best_epoch' and 'batch'.
+    # the MetadataWriterCallback only sets 'epoch', 'best_epoch' and 'current_batch'.
     # We can add in anything else we like here
     meta_file = os.path.join(args.out_directory, "metadata.json")
     meta_writer = MetadataWriterCallback(meta_file, args.out_directory)
@@ -562,38 +625,40 @@ def run_training(cmd_line_args=None):
         print("starting with empty metadata")
 
     # set all settings: default, from args or from metadata
-    set_training_settings(resume, args, meta_writer.metadata)
+    # generate new shuffle files if needed
+    set_training_settings(resume, args, meta_writer.metadata, len(dataset["states"]))
 
     # get train/validation/test indices
     train_indices, val_indices, test_indices \
-        = get_train_val_test_indices(args, meta_writer, resume, dataset)
+        = load_train_val_test_indices(args.verbose, args.symmetries, len(dataset["states"]),
+                                      meta_writer.metadata["batch_size"], args.out_directory)
 
     # create dataset generators
     train_data_generator = shuffled_hdf5_batch_generator(
         dataset["states"],
         dataset["actions"],
         train_indices,
-        meta_writer.metadata["batch_size"],
-        BOARD_TRANSFORMATIONS)
+        meta_writer.metadata["batch_size"])
     val_data_generator = shuffled_hdf5_batch_generator(
         dataset["states"],
         dataset["actions"],
         val_indices,
-        meta_writer.metadata["batch_size"],
-        BOARD_TRANSFORMATIONS)
+        meta_writer.metadata["batch_size"])
 
     # check if step decay has to be applied
     if meta_writer.metadata["decay_every"] is None:
         # use normal decay
-        sgd = SGD(lr=meta_writer.metadata["learning_rate"], decay=meta_writer.metadata["decay"])
-        model_callbacks = [meta_writer]
+        sgd = SGD(lr=meta_writer.metadata["learning_rate"])
+        lr_decay_callback = LrDecayCallback(meta_writer.metadata["learning_rate"],
+                                            meta_writer.metadata["decay"])
+        model_callbacks = [meta_writer, lr_decay_callback]
     else:
         # use step decay
         sgd = SGD(lr=meta_writer.metadata["learning_rate"])
-        lr_scheduler_callback = LrSchedulerCallback(meta_writer.metadata["learning_rate"],
-                                                    meta_writer.metadata["decay_every"],
-                                                    meta_writer.metadata["decay"], args.verbose)
-        model_callbacks = [meta_writer, lr_scheduler_callback]
+        lr_step_decay_callback = LrStepDecayCallback(meta_writer.metadata["learning_rate"],
+                                                     meta_writer.metadata["decay_every"],
+                                                     meta_writer.metadata["decay"], args.verbose)
+        model_callbacks = [meta_writer, lr_step_decay_callback]
 
     model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=["accuracy"])
 
