@@ -42,6 +42,7 @@ BOARD_TRANSFORMATIONS = {
 def one_hot_action(action, size=19):
     """Convert an (x,y) action into a size x size array of zeros with a 1 at x,y
     """
+
     categorical = np.zeros((size, size))
     categorical[action] = 1
     return categorical
@@ -110,6 +111,9 @@ def confirm(prompt=None, resp=False):
 
 
 class LrDecayCallback(Callback):
+    """Set learning rate every batch according to:
+       initial_learning_rate * (1. / (1. + self.decay * curent_batch))
+    """
 
     def __init__(self, learning_rate, decay):
         super(Callback, self).__init__()
@@ -141,6 +145,9 @@ class LrDecayCallback(Callback):
 
 
 class LrStepDecayCallback(Callback):
+    """Set learning rate every decay_every batches according to:
+       initial_learning_rate * (decay ^ (current_batch / decay every))
+    """
 
     def __init__(self, learning_rate, decay_every, decay, verbose):
         super(Callback, self).__init__()
@@ -182,6 +189,9 @@ class LrStepDecayCallback(Callback):
 
 
 class MetadataWriterCallback(Callback):
+    """Set current batch at training start
+       Save metadata and Model after every epoch
+    """
 
     def __init__(self, path, root):
         super(Callback, self).__init__()
@@ -228,8 +238,9 @@ class MetadataWriterCallback(Callback):
 
 
 def validate_feature_planes(verbose, dataset, model_features):
+    """Verify that dataset's features match the model's expected features.
+    """
 
-    # Verify that dataset's features match the model's expected features.
     if 'features' in dataset:
         dataset_features = dataset['features'][()]
         dataset_features = dataset_features.split(",")
@@ -333,6 +344,11 @@ def create_and_save_shuffle_indices(train_val_test, max_validation,
 
 
 def load_train_val_test_indices(verbose, arg_symmetries, dataset_length, batch_size, directory):
+    """Load indices from .npz files
+       Remove unwanted symmerties
+       Make Train set dividable by batch_size
+       Return train/val/test set
+    """
     # shuffle file locations for train/validation/test set
     shuffle_file_train = os.path.join(directory, "shuffle_train.npz")
     shuffle_file_val = os.path.join(directory, "shuffle_validate.npz")
@@ -410,25 +426,31 @@ def set_training_settings(resume, args, metadata, dataset_length):
         # check if decay_every is the same
         # TODO better explanation why this might be bad
         if args.decay_every is not None and metadata["decay_every"] != args.decay_every:
+            print("Setting a new --decay-every might result in a different learning rate, restarting training might be advisable.")  # noqa: E501
             if args.override or confirm("Are you sure you want to use new decay every setting?", False):  # noqa: E501
                 metadata["decay_every"] = args.decay_every
 
         # check if learning_rate is the same
         # TODO better explanation why this might be bad
         if args.learning_rate is not None and metadata["learning_rate"] != args.learning_rate:
+            print("Setting a new --learning-rate might result in a different learning rate, restarting training might be advisable.")  # noqa: E501
             if args.override or confirm("Are you sure you want to use new learning rate setting?", False):  # noqa: E501
                 metadata["learning_rate"] = args.learning_rate
 
         # check if decay is the same
         # TODO better explanation why this might be bad
         if args.decay is not None and metadata["decay"] != args.decay:
+            print("Setting a new --decay might result in a different learning rate, restarting training might be advisable.")  # noqa: E501
             if args.override or confirm("Are you sure you want to use new decay setting?", False):  # noqa: E501
                 metadata["decay"] = args.decay
 
         # check if batch_size is the same
         # TODO better explanation why this might be bad
         if args.minibatch is not None and metadata["batch_size"] != args.minibatch:
+            print("current_batch will be recalculated, restarting training might be advisable.")
             if args.override or confirm("Are you sure you want to use new minibatch setting?", False):  # noqa: E501
+                self.metadata["current_batch"] = int((self.metadata["current_batch"] *
+                                                     metadata["batch_size"]) / args.minibatch)
                 metadata["batch_size"] = args.minibatch
 
         # check if max_validation is the same
