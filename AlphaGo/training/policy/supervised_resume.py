@@ -52,11 +52,11 @@ def resume_training(cmd_line_args=None):
 
         # include verbose
         training_arguments = [metadata["model_file"], metadata["training_data"], args.directory,
-                             '--weights', weight_file, "-v"]
+                              '--weights', weight_file, "-v"]
     else:
         # exclude verbose
         training_arguments = [metadata["model_file"], metadata["training_data"], args.directory,
-                             '--weights', weight_file]
+                              '--weights', weight_file]
 
     # start training
     run_training(training_arguments)
