@@ -450,7 +450,7 @@ def set_training_settings(resume, args, metadata, dataset_length):
             print("current_batch will be recalculated, restarting training might be advisable.")
             if args.override or confirm("Are you sure you want to use new minibatch setting?", False):  # noqa: E501
                 metadata["current_batch"] = int((metadata["current_batch"] *
-                                                     metadata["batch_size"]) / args.minibatch)
+                                            metadata["batch_size"]) / args.minibatch)
                 metadata["batch_size"] = args.minibatch
 
         # check if max_validation is the same
