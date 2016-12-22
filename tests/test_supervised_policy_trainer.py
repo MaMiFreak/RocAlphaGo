@@ -1,6 +1,6 @@
 import os
-from AlphaGo.training.supervised_policy_trainer import run_training
-from AlphaGo.training.supervised_policy_trainer import load_indices_from_file
+from AlphaGo.training.policy.supervised import run_training
+from AlphaGo.training.policy.supervised import load_indices_from_file
 import unittest
 import numpy as np
 
