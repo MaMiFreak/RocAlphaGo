@@ -231,7 +231,7 @@ class MetadataWriterCallback(Callback):
             json.dump(self.metadata, f, indent=2)
 
         # save model to file with correct epoch
-        save_file = os.path.join(self.root, FOLDER_WEIGHT, 
+        save_file = os.path.join(self.root, FOLDER_WEIGHT,
                                  "weights.{epoch:05d}.hdf5".format(epoch=epoch))
         self.model.save(save_file)
 
@@ -637,7 +637,7 @@ def start_training(args):
     if args.verbose:
         if resume:
             print("trying to resume from %s with weights %s" %
-                  (args.out_directory, 
+                  (args.out_directory,
                    os.path.join(args.out_directory, FOLDER_WEIGHT, args.weights)))
         else:
             if os.path.exists(args.out_directory):
