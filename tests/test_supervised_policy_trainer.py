@@ -40,8 +40,8 @@ class TestSupervisedPolicyTrainer(unittest.TestCase):
         os.remove(os.path.join(output, 'shuffle_train.npz'))
         os.remove(os.path.join(output, 'shuffle_validate.npz'))
         os.remove(os.path.join(output, 'shuffle_test.npz'))
-        os.remove(os.path.join(output, 'supervised_weights/','weights.00000.hdf5'))
-        os.remove(os.path.join(output, 'supervised_weights/','weights.00001.hdf5'))
+        os.remove(os.path.join(output, 'supervised_weights/', 'weights.00000.hdf5'))
+        os.remove(os.path.join(output, 'supervised_weights/', 'weights.00001.hdf5'))
         os.rmdir(os.path.join(output, 'supervised_weights/'))
         os.rmdir(output)
 
@@ -58,8 +58,8 @@ class TestSupervisedPolicyTrainer(unittest.TestCase):
 
         # create shuffle files
         create_and_save_shuffle_indices([.9, .05, .05], 1000000000,
-                                    1033, shuffle_file_train,
-                                    shuffle_file_val, shuffle_file_test)
+                                        1033, shuffle_file_train,
+                                        shuffle_file_val, shuffle_file_test)
 
         # load from .npz files
         # load training set
