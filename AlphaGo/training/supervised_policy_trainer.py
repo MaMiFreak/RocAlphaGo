@@ -231,7 +231,8 @@ class MetadataWriterCallback(Callback):
             json.dump(self.metadata, f, indent=2)
 
         # save model to file with correct epoch
-        save_file = os.path.join(self.root, FOLDER_WEIGHT, "weights.{epoch:05d}.hdf5".format(epoch=epoch))
+        save_file = os.path.join(self.root, FOLDER_WEIGHT, 
+                                 "weights.{epoch:05d}.hdf5".format(epoch=epoch))
         self.model.save(save_file)
 
 
@@ -446,7 +447,7 @@ def set_training_settings(resume, args, metadata, dataset_length):
             print("current_batch will be recalculated, restarting training might be advisable.")
             if args.override or confirm("Are you sure you want to use new minibatch setting?", False):  # noqa: E501
                 metadata["current_batch"] = int((metadata["current_batch"] *
-                                            metadata["batch_size"]) / args.minibatch)
+                                                metadata["batch_size"]) / args.minibatch)
                 metadata["batch_size"] = args.minibatch
 
         # check if max_validation is the same
@@ -536,10 +537,10 @@ def set_training_settings(resume, args, metadata, dataset_length):
 
     # Record all command line args in a list so that all args are recorded even
     # when training is stopped and resumed.
-    # TODO remove function argument from args... or do not save args to metadata 
-    #meta_args_data = metadata.get("cmd_line_args", [])
-    #meta_args_data.append(vars(args))
-    #metadata["cmd_line_args"] = meta_args_data
+    # TODO remove function argument from args... or do not save args to metadata
+    # meta_args_data = metadata.get("cmd_line_args", [])
+    # meta_args_data.append(vars(args))
+    # metadata["cmd_line_args"] = meta_args_data
 
     # create and save new shuffle indices if needed
     if save_new_shuffle_indices:
@@ -636,7 +637,8 @@ def start_training(args):
     if args.verbose:
         if resume:
             print("trying to resume from %s with weights %s" %
-                  (args.out_directory, os.path.join(args.out_directory, FOLDER_WEIGHT, args.weights)))
+                  (args.out_directory, 
+                   os.path.join(args.out_directory, FOLDER_WEIGHT, args.weights)))
         else:
             if os.path.exists(args.out_directory):
                 print("directory %s exists. any previous data will be overwritten" %
@@ -665,7 +667,7 @@ def start_training(args):
 
         if args.verbose:
             print("previous metadata loaded: %d epochs. new epochs will be appended." %
-                len(metadata["epoch_logs"]))
+                  len(metadata["epoch_logs"]))
     else:
         # create new metadata
         metadata = {
@@ -723,16 +725,16 @@ def resume_training(args):
 def handle_arguments(cmd_line_args=None):
     """Run training. command-line args may be passed in as a list
     """
-    
+
     import argparse
     parser = argparse.ArgumentParser(description='Perform supervised training on a policy network.')
     # subparser is always first argument
     subparsers = parser.add_subparsers(help='sub-command help')
 
     # sub parser start training
-    train = subparsers.add_parser('train', help='Start or resume supervised training on a policy network.')
+    train = subparsers.add_parser('train', help='Start or resume supervised training on a policy network.')  # noqa: E501
     # required arguments
-    train.add_argument("out_directory", help="directory where metadata and weights will be saved")
+    train.add_argument("out_directory", help="directory where metadata and weights will be saved")  # noqa: E501
     train.add_argument("model", help="Path to a JSON model file (i.e. from CNNPolicy.save_model())")  # noqa: E501
     train.add_argument("train_data", help="A .h5 file of training data")
     # frequently used args
@@ -755,7 +757,7 @@ def handle_arguments(cmd_line_args=None):
     # sub parser resume training
     resume = subparsers.add_parser('resume', help='Resume supervised training on a policy network. (Settings are loaded from savefile.)')  # noqa: E501
     # required arguments
-    resume.add_argument("out_directory", help="directory where metadata and weight files where stored during previous session.")
+    resume.add_argument("out_directory", help="directory where metadata and weight files where stored during previous session.")  # noqa: E501
     # optional argument
     resume.add_argument("--verbose", "-v", help="Turn on verbose mode", default=False, action="store_true")  # noqa: E501
     resume.add_argument("--weights", help="Name of a .h5 weights file (in the output directory) to load to resume training. Default: #Newest weight file.", default=None)  # noqa: E501
