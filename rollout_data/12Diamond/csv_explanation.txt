@@ -1,0 +1,132 @@
+sgf database used go4go pro games
+go4go_D12_symmetries_8 -> find all rotational symmetries
+go4go_D12_symmetries_16 -> find all rotational & colour symmetries
+
+----------------------------------
+several approaches are possible: -> see also end of file
+diamond shape:
+..S..
+.SSS.
+SSLSS
+.SSS.
+..S..
+S = stone location included in pattern
+L = last move played, also encoded in hash
+
+one of the S locations is the move to be considered playing next
+all liberty counts are preformend with this stone present but no
+dead stones removed before calculating libery counts.
+meaning there might be stones with liberty count 0
+
+positions on 1th and 2nd line are excluded as diamond shap would
+be outside board.
+
+----------------------------------
+tables in 3x3 csv files:
+pattern_hash, pattern_occurence, pattern_chosen, amount_symmetries
+
+----------------------------------
+pattern hash:
+#1 active_player_colour (1/2)
+#13 stones: black, white, empty (0/1/2)
+#13 liberties: liberty count (0/1/2/3)
+
+example:
+110000020000013000003000003
+active_player_colour: 1 (black)
+stones  1000002000001
+liberty 3000003000003
+
+stones liberties (max 3)
+  B      3  
+ ...    000 
+..W..  00300
+ ...    000 
+  B      3  
+
+example:
+200010010202200003003030330
+active_player_colour: 2 (white)
+stones  0001001020220
+liberty 0003003030330
+
+stones liberties (max 3)
+  .      0  
+ ..B    003 
+..B.W  00303
+ .WW    033 
+  .      0  
+
+example:
+102222121111000333333333300
+active_player_colour: 1 (black)
+stones  0222212111100
+liberty 0333333333300
+
+stones liberties (max 3)
+  .      0  
+ WWW    333 
+WBWBB  33333
+ BB.    330 
+  .      0  
+
+----------------------------------
+pattern_occurence:
+how often does this pattern occur, also
+counting all occurences in a game even when player does not play inside diamond pattern
+
+----------------------------------
+pattern_chosen:
+how often this pattern occurs in a game when player does play inside diamond pattern
+
+----------------------------------
+amount_symmetries:
+how many symmetries are included
+
+example:
+110000020000013000003000003;26;18;2
+
+stones:
+  B     3  
+ ...   000 
+..W.. 00300
+ ...   000 
+  B     3  
+
+only two symmetries exist
+  B     .  
+ ...   ... 
+..W.. B.W.B
+ ...   ... 
+  B     .  
+
+
+----------------------------------
+different approaches/things needing further testing:
+
+- different diamond shape? (seems unlikely to me)
+...S...
+..S.S..
+.S...S.
+S.....S
+.S...S.
+..S.S..
+...S...
+
+- do not encode L (centre) stone
+(might need further testing, to me it seems positions get the same hash value even though they are quite different. since active player colour is encoded L stone colour is implied but i had some doubts)
+..S..
+.SSS.
+SSLSS
+.SSS.
+..S..
+
+- encode next stone (position P) NEEDS FURTHER TESTING!!!
+-> multiple ways of doing so, coordinate or using 3/4 as next stone white/black position
+PRO: current gamestate liberties can be used, the hash i implemented (see top) has to compute them with new stone placed
+CON: hashes created with current(see top) implementation might become several different hashes (not sure if this is a con)
+..S..
+.SSS.
+SSLSS
+.SSP.
+..S..

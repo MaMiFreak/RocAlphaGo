@@ -1,0 +1,66 @@
+sgf database used go4go pro games
+go4go_3x3_symmetries_8 -> find all rotational symmetries
+go4go_3x3_symmetries_16 -> find all rotational & colour symmetries
+
+----------------------------------
+
+position on 1th line are not included as pattern would be partly outside board.
+
+----------------------------------
+tables in 3x3 csv files:
+pattern_hash, pattern_occurence, pattern_chosen, amount_symmetries
+
+----------------------------------
+pattern hash:
+#1 active_player_colour (1/2)
+#8 stones: black, white, empty (0/1/2)
+#8 liberties: liberty count (0/1/2/3)
+
+example:
+20001002000030030
+active_player_colour: 2 (white)
+stones liberties (max 3)
+...    000
+WX0    3X0
+.B.    030
+
+example:
+22122200133333003
+active_player_colour: 2 (white)
+stones liberties (max 3)
+WBW    333
+WXW    3X3
+..B    003
+
+example:
+12111101231131032
+active_player_colour: 1 (black)
+stones liberties (max 3)
+WBB    311
+BXB    3X1
+.BW    032
+
+----------------------------------
+pattern_occurence:
+how often does this pattern occur, also
+counting all occurences in a game even when player does not play at X
+
+----------------------------------
+pattern_chosen:
+how often this pattern occurs in a game when player does play at X
+
+----------------------------------
+amount_symmetries:
+how many symmetries are included
+
+example:
+20020020000300300;96;1;2 
+stones:
+00W
+0X0
+W00
+
+only two symmetries exist
+00W W00
+0X0 0X0
+W00 00W
