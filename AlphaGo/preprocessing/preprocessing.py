@@ -232,7 +232,7 @@ def get_nakade(state):
     """Fast rollout feature
     """
 
-    state.pattern_nakade.get( 123, -1 )
+    state.pattern_nakade.get(123, -1)
     feature = np.zeros((state.pattern_nakade_size, state.size, state.size))
     return feature
 
@@ -241,7 +241,7 @@ def get_response_12d(state):
     """Fast rollout feature
     """
 
-    state.pattern_response_12d.get( 123, -1 )
+    state.pattern_response_12d.get(123, -1)
     feature = np.zeros((state.pattern_response_12d_size, state.size, state.size))
     return feature
 
@@ -250,9 +250,10 @@ def get_non_response_3x3(state):
     """Fast rollout feature
     """
 
-    state.pattern_non_response_3x3.get( 123, -1 )
+    state.pattern_non_response_3x3.get(123, -1)
     feature = np.zeros((state.pattern_non_response_3x3_size, state.size, state.size))
     return feature
+
 
 # named features and their sizes are defined here
 FEATURES = {
@@ -345,7 +346,7 @@ class Preprocess(object):
     features for NN inputs
     """
 
-    def __init__(self, state, feature_list=DEFAULT_FEATURES):
+    def __init__(self, state=GameState(), feature_list=DEFAULT_FEATURES):
         """create a preprocessor object that will concatenate together the
         given list of features
         """
