@@ -352,9 +352,12 @@ class Preprocess(object):
         """
 
         # set nakade, 12d/3x3 pattern sizes
-        FEATURES["nakade"]["size"] = state.pattern_nakade_size
-        FEATURES["response_12d"]["size"] = state.pattern_response_12d_size
-        FEATURES["non_response_3x3"]["size"] = state.pattern_non_response_3x3_size
+        # state.pattern_nakade_size
+        FEATURES["nakade"]["size"] = 0
+        # state.pattern_response_12d_size
+        FEATURES["response_12d"]["size"] = 0
+        # state.pattern_non_response_3x3_size
+        FEATURES["non_response_3x3"]["size"] = 0
 
         self.output_dim = 0
         self.feature_list = feature_list
