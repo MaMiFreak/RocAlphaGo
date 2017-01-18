@@ -346,7 +346,7 @@ class Preprocess(object):
     features for NN inputs
     """
 
-    def __init__(self, state=go.GameState(), feature_list=DEFAULT_FEATURES):
+    def __init__(self, feature_list=DEFAULT_FEATURES, state=go.GameState()):
         """create a preprocessor object that will concatenate together the
         given list of features
         """
