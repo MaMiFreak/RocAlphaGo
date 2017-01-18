@@ -1,6 +1,6 @@
 import numpy as np
 
-WHITE = 2
+WHITE = -1
 BLACK = +1
 EMPTY = 0
 PASS_MOVE = None
