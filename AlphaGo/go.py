@@ -1,6 +1,6 @@
 import numpy as np
 
-WHITE = -1
+WHITE = 2
 BLACK = +1
 EMPTY = 0
 PASS_MOVE = None
@@ -29,6 +29,10 @@ class GameState(object):
         # Each pass move by a player subtracts a point
         self.passes_white = 0
         self.passes_black = 0
+        # pattern counts
+        self.pattern_nakade_size = 0
+        self.pattern_response_12d_size = 0
+        self.pattern_non_response_3x3_size = 0
         # `self.liberty_sets` is a 2D array with the same indexes as `board`
         # each entry points to a set of tuples - the liberties of a stone's
         # connected block. By caching liberties in this way, we can directly

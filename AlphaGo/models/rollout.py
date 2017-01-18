@@ -1,12 +1,13 @@
 from keras.models import Sequential
-from keras.layers.core import Flatten
-from nn_util import Bias, NeuralNetBase, neuralnet
+from AlphaGo.util import flatten_idx
 from keras.layers import convolutional
+from keras.layers.core import Activation, Flatten
+from nn_util import Bias, NeuralNetBase, neuralnet
 
 
 @neuralnet
 class CNNRollout(NeuralNetBase):
-    """A convolutional neural network to compute a probability 
+    """A convolutional neural network to compute a probability
        distribution over the next action
     """
 
