@@ -205,6 +205,55 @@ def get_legal(state):
     return feature
 
 
+def get_response(state):
+    """Fast rollout feature
+    """
+
+    feature = np.zeros((1, state.size, state.size))
+    return feature
+
+
+def get_save_atari(state):
+    """Fast rollout feature
+    """
+
+    return get_self_atari_size(state, maximum=1)
+
+
+def get_neighbor(state):
+    """Fast rollout feature
+    """
+
+    feature = np.zeros((8, state.size, state.size))
+    return feature
+
+
+def get_nakade(state):
+    """Fast rollout feature
+    """
+
+    state.pattern_nakade.get( 123, -1 )
+    feature = np.zeros((state.pattern_nakade_size, state.size, state.size))
+    return feature
+
+
+def get_response_12d(state):
+    """Fast rollout feature
+    """
+
+    state.pattern_response_12d.get( 123, -1 )
+    feature = np.zeros((state.pattern_response_12d_size, state.size, state.size))
+    return feature
+
+
+def get_non_response_3x3(state):
+    """Fast rollout feature
+    """
+
+    state.pattern_non_response_3x3.get( 123, -1 )
+    feature = np.zeros((state.pattern_non_response_3x3_size, state.size, state.size))
+    return feature
+
 # named features and their sizes are defined here
 FEATURES = {
     "board": {
@@ -254,6 +303,30 @@ FEATURES = {
     "legal": {
         "size": 1,
         "function": get_legal
+    },
+    "response": {
+        "size": 1,
+        "function": get_response
+    },
+    "save_atari": {
+        "size": 1,
+        "function": get_save_atari
+    },
+    "neighbor": {
+        "size": 8,
+        "function": get_neighbor
+    },
+    "nakade": {
+        "size": 0,
+        "function": get_nakade
+    },
+    "response_12d": {
+        "size": 0,
+        "function": get_response_12d
+    },
+    "non_response_3x3": {
+        "size": 0,
+        "function": get_non_response_3x3
     }
 }
 
@@ -262,16 +335,25 @@ DEFAULT_FEATURES = [
     "self_atari_size", "liberties_after", "ladder_capture", "ladder_escape",
     "sensibleness", "zeros"]
 
+DEFAULT_ROLLOUT_FEATURES = [
+    "response", "save_atari", "neighbor", "nakade", "response_12d",
+    "non_response_3x3"]
+
 
 class Preprocess(object):
     """a class to convert from AlphaGo GameState objects to tensors of one-hot
     features for NN inputs
     """
 
-    def __init__(self, feature_list=DEFAULT_FEATURES):
+    def __init__(self, state, feature_list=DEFAULT_FEATURES):
         """create a preprocessor object that will concatenate together the
         given list of features
         """
+
+        # set nakade, 12d/3x3 pattern sizes
+        FEATURES["nakade"]["size"] = state.pattern_nakade_size
+        FEATURES["response_12d"]["size"] = state.pattern_response_12d_size
+        FEATURES["non_response_3x3"]["size"] = state.pattern_non_response_3x3_size
 
         self.output_dim = 0
         self.feature_list = feature_list
