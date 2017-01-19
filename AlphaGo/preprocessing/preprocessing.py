@@ -232,7 +232,7 @@ def get_nakade(state):
     """Fast rollout feature
     """
 
-    state.pattern_nakade.get(123, -1)
+    # state.pattern_nakade.get(123, -1)
     feature = np.zeros((state.pattern_nakade_size, state.size, state.size))
     return feature
 
@@ -241,7 +241,7 @@ def get_response_12d(state):
     """Fast rollout feature
     """
 
-    state.pattern_response_12d.get(123, -1)
+    # state.pattern_response_12d.get(123, -1)
     feature = np.zeros((state.pattern_response_12d_size, state.size, state.size))
     return feature
 
@@ -250,7 +250,7 @@ def get_non_response_3x3(state):
     """Fast rollout feature
     """
 
-    state.pattern_non_response_3x3.get(123, -1)
+    # state.pattern_non_response_3x3.get(123, -1)
     feature = np.zeros((state.pattern_non_response_3x3_size, state.size, state.size))
     return feature
 
@@ -352,12 +352,9 @@ class Preprocess(object):
         """
 
         # set nakade, 12d/3x3 pattern sizes
-        # state.pattern_nakade_size
-        FEATURES["nakade"]["size"] = 0
-        # state.pattern_response_12d_size
-        FEATURES["response_12d"]["size"] = 0
-        # state.pattern_non_response_3x3_size
-        FEATURES["non_response_3x3"]["size"] = 0
+        FEATURES["nakade"]["size"] = state.pattern_nakade_size
+        FEATURES["response_12d"]["size"] = state.pattern_response_12d_size
+        FEATURES["non_response_3x3"]["size"] = state.pattern_non_response_3x3_size
 
         self.output_dim = 0
         self.feature_list = feature_list

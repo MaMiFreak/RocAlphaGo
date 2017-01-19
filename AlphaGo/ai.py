@@ -7,7 +7,7 @@ from AlphaGo import mcts
 
 class GreedyPolicyPlayer(object):
     """A player that uses a greedy policy (i.e. chooses the highest probability
-    move each turn)
+       move each turn)
     """
 
     def __init__(self, policy_function, pass_when_offered=False, move_limit=None):
@@ -32,10 +32,10 @@ class GreedyPolicyPlayer(object):
 
 class ProbabilisticPolicyPlayer(object):
     """A player that samples a move in proportion to the probability given by the
-    policy.
+       policy.
 
-    By manipulating the 'temperature', moves can be pushed towards totally random
-    (high temperature) or towards greedy play (low temperature)
+       By manipulating the 'temperature', moves can be pushed towards totally random
+       (high temperature) or towards greedy play (low temperature)
     """
 
     def __init__(self, policy_function, temperature=1.0, pass_when_offered=False, move_limit=None):
@@ -96,6 +96,79 @@ class ProbabilisticPolicyPlayer(object):
                 choice_idx = np.random.choice(len(moves), p=probabilities)
                 move_list[i] = moves[choice_idx]
         return move_list
+
+
+class GreedyRolloutPlayer(object):
+    """A player that uses a greedy policy (i.e. chooses the highest probability
+       move each turn)
+    """
+
+    def __init__(self, rollout_function, pass_when_offered=False, move_limit=None):
+        self.rollout = rollout_function
+        self.pass_when_offered = pass_when_offered
+        self.move_limit = move_limit
+
+    def get_move(self, state):
+        if self.move_limit is not None and len(state.history) > self.move_limit:
+            return go.PASS_MOVE
+        if self.pass_when_offered:
+            if len(state.history) > 100 and state.history[-1] == go.PASS_MOVE:
+                return go.PASS_MOVE
+        sensible_moves = [move for move in state.get_legal_moves(include_eyes=False)]
+        if len(sensible_moves) > 0:
+            move_probs = self.rollout.eval_state(state, sensible_moves)
+            max_prob = max(move_probs, key=itemgetter(1))
+            return max_prob[0]
+        # No 'sensible' moves available, so do pass move
+        return go.PASS_MOVE
+
+
+class ProbabilisticRolloutPlayer(object):
+    """A player that samples a move in proportion to the probability given by the
+       rollout policy.
+
+       By manipulating the 'temperature', moves can be pushed towards totally random
+       (high temperature) or towards greedy play (low temperature)
+    """
+
+    def __init__(self, rollout_function, temperature=1.0, pass_when_offered=False, move_limit=None):
+        assert(temperature > 0.0)
+        self.rollout = rollout_function
+        self.move_limit = move_limit
+        self.beta = 1.0 / temperature
+        self.pass_when_offered = pass_when_offered
+        self.move_limit = move_limit
+
+    def apply_temperature(self, distribution):
+        log_probabilities = np.log(distribution)
+        # apply beta exponent to probabilities (in log space)
+        log_probabilities = log_probabilities * self.beta
+        # scale probabilities to a more numerically stable range (in log space)
+        log_probabilities = log_probabilities - log_probabilities.max()
+        # convert back from log space
+        probabilities = np.exp(log_probabilities)
+        # re-normalize the distribution
+        return probabilities / probabilities.sum()
+
+    def get_move(self, state):
+        if self.move_limit is not None and len(state.history) > self.move_limit:
+            return go.PASS_MOVE
+        if self.pass_when_offered:
+            if len(state.history) > 100 and state.history[-1] == go.PASS_MOVE:
+                return go.PASS_MOVE
+        sensible_moves = [move for move in state.get_legal_moves(include_eyes=False)]
+        if len(sensible_moves) > 0:
+            move_probs = self.rollout.eval_state(state, sensible_moves)
+            # zip(*list) is like the 'transpose' of zip;
+            # zip(*zip([1,2,3], [4,5,6])) is [(1,2,3), (4,5,6)]
+            moves, probabilities = zip(*move_probs)
+            # apply 'temperature' to the distribution
+            probabilities = self.apply_temperature(probabilities)
+            # numpy interprets a list of tuples as 2D, so we must choose an
+            # _index_ of moves then apply it in 2 steps
+            choice_idx = np.random.choice(len(moves), p=probabilities)
+            return moves[choice_idx]
+        return go.PASS_MOVE
 
 
 class MCTSPlayer(object):
