@@ -209,7 +209,14 @@ def get_response(state):
     """Fast rollout feature
     """
 
+    # TODO inefficient??
+    # check nakade and 3x3 patterns as well??
     feature = np.zeros((1, state.size, state.size))
+    for move in state.get_legal_moves(include_eyes=False):
+        if state.get_pattern_response_12d(move) >= 0:
+            (x, y) = move
+            feature[0, x, y] = 1
+    
     return feature
 
 
@@ -225,6 +232,11 @@ def get_neighbor(state):
     """
 
     feature = np.zeros((8, state.size, state.size))
+    if len(state.history) > 0:
+        for (x, y) in state.get_legal_moves(include_eyes=False):
+            index = state.get_8_connected((x, y))
+            if index >= 0:
+                feature[index, x, y] = 1
     return feature
 
 
@@ -232,8 +244,12 @@ def get_nakade(state):
     """Fast rollout feature
     """
 
-    # state.pattern_nakade.get(123, -1)
     feature = np.zeros((state.pattern_nakade_size, state.size, state.size))
+    for (x, y) in state.get_legal_moves(include_eyes=False):
+        index = state.get_pattern_nakade((x, y))
+        if index >= 0:
+            feature[index, x, y] = 1
+    
     return feature
 
 
@@ -241,8 +257,13 @@ def get_response_12d(state):
     """Fast rollout feature
     """
 
-    # state.pattern_response_12d.get(123, -1)
     feature = np.zeros((state.pattern_response_12d_size, state.size, state.size))
+    if len(state.history) > 0:
+        for (x, y) in state.get_legal_moves(include_eyes=False):
+            index = state.get_pattern_response_12d((x, y))
+            if index >= 0:
+                feature[index, x, y] = 1
+    
     return feature
 
 
@@ -250,8 +271,12 @@ def get_non_response_3x3(state):
     """Fast rollout feature
     """
 
-    # state.pattern_non_response_3x3.get(123, -1)
     feature = np.zeros((state.pattern_non_response_3x3_size, state.size, state.size))
+    for (x, y) in state.get_legal_moves(include_eyes=False):
+        index = state.get_pattern_non_response_3x3((x, y))
+        if index >= 0:
+            feature[index, x, y] = 1
+    
     return feature
 
 
