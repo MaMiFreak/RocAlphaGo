@@ -34,20 +34,8 @@ cdef class GameState:
     cdef object previous_hashes
     cdef object legalMoves
 
-    cdef short get_stone_age( self, short location, short max )
-    cdef dict map_group( self, short location )
-    cdef short calculate_board_location( self, char x, char y )
-    cdef void set_neighbors( self, int size )
-    cdef void set_3x3_neighbors(self, int size)
-    cdef void set_12d_neighbors( self, int size )
     cdef set_root( self, char size )
     cdef set_duplicate( self, GameState copyState )
-    cdef long get_hash_12d_response( self, char x, char y, short centre )
-    cdef long get_hash_3x3_non_response(self, short location)
     cdef char get_board_feature( self, short location )
-    cdef char is_ladder_capture( self, short location )
-    cdef char is_ladder_escape( self, short location )
-    cdef short get_liberties( self, short location, short max )
     cdef void add_move( self, short location )
-    cdef GameState new_state_add_move( self, short location )
 
