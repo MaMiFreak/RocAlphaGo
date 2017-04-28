@@ -1,6 +1,15 @@
 import numpy as np
 cimport numpy as np
 
+# observe stones > EMPTY
+#         border < EMPTY
+# be aware you should NOT use != EMPTY as this includes border locations
+cdef char PASS   = -1
+cdef char BORDER = 0
+cdef char EMPTY  = 1
+cdef char WHITE  = 2
+cdef char BLACK  = 3
+
 # structure to store ladder group information
 cdef class LadderGroup:
     cdef dict location_stones
@@ -55,6 +64,7 @@ cdef class GameState:
     cdef dict   hash_lookup
     cdef int    current_hash
     cdef set    previous_hashes
+
     cdef list   legalMoves
 
     ############################################################################
@@ -62,8 +72,10 @@ cdef class GameState:
     #                                                                          #
     ############################################################################
     cdef short calculate_board_location( self, char x, char y )
+    cdef short calculate_board_location_or_border( self, char x, char y )
     cdef void set_neighbors( self, int size )
     cdef void set_3x3_neighbors(self, int size)
+    cdef void set_3x3_neighbors_backup(self, int size)
     cdef void set_12d_neighbors( self, int size )
     cdef initialize_new( self, char size )
     cdef initialize_duplicate( self, GameState copyState )
@@ -76,8 +88,11 @@ cdef class GameState:
     cdef void combine_groups( self, Group group_keep, Group group_remove )
     cdef void remove_group( self, Group group_remove )
     cdef void add_to_group( self, short location )
+    cdef bint has_liberty_after( self, short location )
+    cdef bint is_legal_move( self, short location )
     cdef long generate_12d_hash( self, short centre )
     cdef long generate_3x3_hash( self, short centre )
+    cdef Group get_group_after( self, short location )
 
     ############################################################################
     #   public cdef functions used by preprocessing                            #
@@ -87,12 +102,15 @@ cdef class GameState:
     cdef long get_hash_12d( self, short centre )
     cdef long get_hash_3x3( self, short location )
     cdef char get_board_feature( self, short location )
-    cdef char is_ladder_capture( self, short location )
-    cdef char is_ladder_escape( self, short location )
-    cdef short get_move_history( self )
-    cdef short get_liberties( self, short location, short max )
+    cdef bint is_group_in_ladder( self, char  *board, LadderGroup group, short location, int maxDepth, char group_colour, char chase_colour )
+    cdef bint can_group_escape_ladder( self, char  *board, LadderGroup group, short location, int maxDepth, char group_colour, char chase_colour )
+    cdef char is_ladder_capture( self, Group group, short location, int maxDepth )
+    cdef char is_ladder_escape( self, Group group, short location, int maxDepth )
+    cdef bint is_true_eye( self, short location, dict eyes )
+    cdef list get_sensible_moves( self )
+    cdef char is_sensible( self, location )
     cdef short get_liberties_after( self, short location, short max )
-    cdef short get_capture( self, short location, short max )
+    cdef short get_capture_size( self, short location, short max )
     cdef short get_self_atari_size( self, short location, short max )
 
     ############################################################################

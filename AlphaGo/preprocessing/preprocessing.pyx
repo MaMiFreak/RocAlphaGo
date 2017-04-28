@@ -4,7 +4,10 @@ cimport cython
 import numpy as np
 cimport numpy as np
 from numpy cimport ndarray
-from AlphaGo.go cimport GameState, Group
+from AlphaGo.go cimport GameState, Group, BLACK, EMPTY
+
+import sys
+from python_ref cimport Py_DECREF
 
 cdef class Preprocess:
 
@@ -49,7 +52,7 @@ cdef class Preprocess:
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_board( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
+    cdef int get_board( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
         """
            A feature encoding WHITE BLACK and EMPTY on separate planes.
            plane 0 always refers to the current player stones
@@ -68,7 +71,7 @@ cdef class Preprocess:
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_turns_since( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
+    cdef int get_turns_since( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
         """
            A feature encoding the age of the stone at each location up to 'maximum'
 
@@ -78,27 +81,37 @@ cdef class Preprocess:
         """
 
         cdef short location
-        cdef int   age = 0
-        cdef int   i   = len( state.history ) - 1
+        cdef int   age      = offSet + 7
+        cdef int   i        = len( state.history ) - 1
+        cdef dict  agesSet  = {}
+
+        # set all stones to max age
+        for location in state.history:
+            if state.board[ location ] > EMPTY:
+                tensor[ age, location ] = 1
+
+        age = 0
 
         # loop over history backwards
-        while i >= 0:
+        while age < 7 and i >= 0:
 
             location = state.history[ i ]
 
-            # set age
-            tensor[ offSet + age, location ] = 1
+            # if age has not been set yet
+            if not location in agesSet and state.board[ location ] > EMPTY:
 
-            i -= 1
+                tensor[ offSet + age, location ] = 1
+                tensor[ offSet + 7,   location ] = 0
+                agesSet[ location ]              = location
 
-            if age < 7:
-                age += 1 
+            i   -= 1
+            age += 1
 
         return offSet + 8
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_liberties( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
+    cdef int get_liberties( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
         """
            A feature encoding the number of liberties of the group connected to the stone at
            each location
@@ -132,7 +145,7 @@ cdef class Preprocess:
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_capture_size( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
+    cdef int get_capture_size( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
         """
            A feature encoding the number of opponent stones that would be captured by
            playing at each location, up to 'maximum'
@@ -158,98 +171,186 @@ cdef class Preprocess:
         # loop over all groups on board
         for group in state.groupsList:
 
-            # check if group has one liberty
-            if len( group.location_liberty ) == 1 and state.board[group.location_liberty.values()[0]] == opponent:
+            location = group.location_stones.values()[0]
 
-                # calculate group size
-                groupSize = len( group.location_stones ) - 1
+            # check if group has one liberty and is owned by opponent
+            if state.board[ location ] == opponent and len( group.location_liberty ) == 1:
 
-                # check max
-                if groupSize > 7:
-                    groupSize = 7
+                # calculate group size ( including other groups captured )
+                location  = group.location_liberty.values()[0]
+                groupSize = state.get_capture_size( location, 7 )
 
-                location = group.location_liberty.values()[0]
-                tensor[ offSet + groupSize, location ] = 1
+                if groupSize > 0 or len( group.location_liberty ) > 1:
+
+                    tensor[ offSet + groupSize, location ] = 1
+
                 tensor[ offSet, location ] = 0
             
         return offSet + 8
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_self_atari_size( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """A feature encoding the size of the own-stone group that is put into atari by
-        playing at a location
+    cdef int get_self_atari_size( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           A feature encoding the size of the own-stone group that is put into atari by
+           playing at a location
 
         """
+
+        cdef Group group
+        cdef short location
+        cdef int   group_liberty
+
+        # loop over all groups on board
+        for location in state.legalMoves:
+
+            group = state.get_group_after( location )
+            group_liberty = len( group.location_liberty )
+            if group_liberty == 1:
+
+                group_liberty = len( group.location_stones ) - 1
+                if group_liberty > 7:
+                    group_liberty = 7
+
+                tensor[ offSet + group_liberty, location ] = 1
+                    
+        return offSet + 8
+
+    @cython.boundscheck( False )
+    @cython.wraparound(  False )
+    cdef int get_liberties_after( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           A feature encoding what the number of liberties *would be* of the group connected to
+           the stone *if* played at a location
+
+           Note:
+           - there is no zero-liberties plane; the 0th plane indicates groups in atari
+           - the [maximum-1] plane is used for any stone with liberties greater than or equal to maximum
+           - illegal move locations are all-zero features
+        """
+
+        cdef short location
+        cdef int   liberty
+
+        # loop over all legal moves and set to zero
+        for location in state.legalMoves:
+
+            liberty = state.get_liberties_after( location, 7 )
+            if liberty >= 0:
+
+                tensor[ offSet + liberty, location ] = 1
 
         return offSet + 8
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_liberties_after( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """A feature encoding what the number of liberties *would be* of the group connected to
-        the stone *if* played at a location
-
-        Note:
-        - there is no zero-liberties plane; the 0th plane indicates groups in atari
-        - the [maximum-1] plane is used for any stone with liberties greater than or equal to maximum
-        - illegal move locations are all-zero features
+    cdef int get_ladder_capture( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           A feature wrapping GameState.is_ladder_capture().
+           check if an opponent group can be captured in a ladder
         """
 
-        return offSet + 8
+        cdef Group group
+        cdef int   liberty
+        cdef char  opponent = state.player_opponent
+
+        # loop over all groups on board
+        for group in state.groupsList:
+
+            location = group.location_stones.values()[0]
+
+            # check if group has one liberty and is owned by opponent
+            if state.board[ location ] == opponent and len( group.location_liberty ) == 2:
+
+                for location in group.location_liberty:
+
+                    tensor[ offSet, location ] = state.is_ladder_capture( group, location, 80 )
+
+        return offSet + 1
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_ladder_capture( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """A feature wrapping GameState.is_ladder_capture().
+    cdef int get_ladder_escape( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           A feature wrapping GameState.is_ladder_escape().
+           check if player_current group can escape ladder
+        """
+
+        cdef Group group
+        cdef short location
+        cdef char  current = state.player_current
+
+        # loop over all groups on board
+        for group in state.groupsList:
+
+            location = group.location_stones.values()[0]
+
+            # check if group has one liberty and is owned by opponent
+            if state.board[ location ] == current and len( group.location_liberty ) == 1:
+
+                location = group.location_liberty.values()[0]
+
+                tensor[ offSet, location ] = state.is_ladder_escape( group, location, 80 )
+
+        return offSet + 1
+
+    @cython.boundscheck( False )
+    @cython.wraparound(  False )
+    cdef int get_sensibleness( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           A move is 'sensible' if it is legal and if it does not fill the current_player's own eye
+        """
+
+        cdef short location
+        cdef list  sensible_moves = state.get_sensible_moves()
+
+        # loop over all legal moves and set to zero
+        for location in sensible_moves:
+
+            tensor[ offSet, location ] = 1
+
+        return offSet + 1
+
+    @cython.boundscheck( False )
+    @cython.wraparound(  False )
+    cdef int get_legal( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           Zero at all illegal moves, one at all legal moves. Unlike sensibleness, no eye check is done
+           not used??
+        """
+
+        cdef short location
+
+        # loop over all legal moves and set to one
+        for location in state.legalMoves:
+
+            tensor[ offSet, location ] = 1
+
+        return offSet + 1
+
+    @cython.boundscheck( False )
+    @cython.wraparound(  False )
+    cdef int get_response( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           Fast rollout feature
         """
 
         return offSet + 1
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_ladder_escape( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """A feature wrapping GameState.is_ladder_escape().
+    cdef int get_save_atari( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           Fast rollout feature
         """
 
         return offSet + 1
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_sensibleness( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """A move is 'sensible' if it is legal and if it does not fill the current_player's own eye
+    cdef int get_neighbor( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
         """
-
-        return offSet + 1
-
-    @cython.boundscheck( False )
-    @cython.wraparound(  False )
-    cdef int get_legal( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Zero at all illegal moves, one at all legal moves. Unlike sensibleness, no eye check is done
-        """
-
-        return offSet + 1
-
-    @cython.boundscheck( False )
-    @cython.wraparound(  False )
-    cdef int get_response( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Fast rollout feature
-        """
-
-        return offSet + 1
-
-    @cython.boundscheck( False )
-    @cython.wraparound(  False )
-    cdef int get_save_atari( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Fast rollout feature
-        """
-
-        return offSet + 1
-
-    @cython.boundscheck( False )
-    @cython.wraparound(  False )
-    cdef int get_neighbor( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Fast rollout feature
+           Fast rollout feature
         """
 
         # get last move location
@@ -259,16 +360,18 @@ cdef class Preprocess:
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_nakade( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Fast rollout feature
+    cdef int get_nakade( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           Fast rollout feature
         """
 
         return offSet + self.pattern_nakade_size
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_response_12d( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Fast rollout feature
+    cdef int get_response_12d( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           Fast rollout feature
         """
 
         # get last move location
@@ -278,16 +381,18 @@ cdef class Preprocess:
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int get_non_response_3x3( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Fast rollout feature
+    cdef int get_non_response_3x3( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           Fast rollout feature
         """
 
         return offSet + self.pattern_non_response_3x3_size
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int zeros( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Fast rollout feature
+    cdef int zeros( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           Plane filled with zeros
         """
         
         # do nothing, numpy array has to be initialized with zero
@@ -296,8 +401,9 @@ cdef class Preprocess:
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int ones( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Fast rollout feature
+    cdef int ones( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
+        """
+           Plane filled with ones
         """
 
         cdef short location
@@ -309,9 +415,19 @@ cdef class Preprocess:
 
     @cython.boundscheck( False )
     @cython.wraparound(  False )
-    cdef int colour( self, GameState state, np.ndarray[double, ndim=2] tensor, int offSet ):
-        """Fast rollout feature
+    cdef int colour( self, GameState state, np.ndarray[tensor_type, ndim=2] tensor, int offSet ):
         """
+           Value net feature, plane with ones if active_player is black else zeros
+        """
+
+        cdef short location
+
+        # if player_current is white
+        if state.player_current == BLACK:
+
+                for location in range( 0, self.board_locations ):
+
+                    tensor[ offSet, location ] = 1
 
         return offSet + 1
 
@@ -320,9 +436,13 @@ cdef class Preprocess:
     #                                                                          #
     ############################################################################
 
-    def __init__( self, feature_list, dict_nakade=None, dict_3x3=None, dict_12d=None, verbose=False ):
+    def __init__( self, list feature_list, dict_nakade=None, dict_3x3=None, dict_12d=None, verbose=False ):
         """
         """
+
+        cdef int i
+        cdef preprocess_method processor
+        self.c_processors = <preprocess_method  *>malloc( len( feature_list ) * sizeof( preprocess_method  ) )
 
         # load nakade patterns
         self.pattern_nakade = {}
@@ -443,17 +563,115 @@ cdef class Preprocess:
         for i in range( len( feature_list ) ):
             feat = feature_list[ i ].lower()
             if feat in FEATURES:
-                self.processors[ i ] = FEATURES[ feat ][ "function" ]
-                self.output_dim     += FEATURES[ feat ][ "size"     ]
+                self.processors[   i ] = FEATURES[ feat ][ "function" ]
+                self.processors[   i ] = FEATURES[ feat ][ "function" ]
+                self.output_dim       += FEATURES[ feat ][ "size"     ]
             else:
                 raise ValueError( "uknown feature: %s" % feat )
+
+        keep_count = self.output_dim
+        self.output_dim = 0
+
+        for i in range( len( feature_list ) ):
+            feat = feature_list[ i ].lower()
+            if feat == "board":
+                processor              = self.get_board
+                self.output_dim     += 3
+
+            elif feat == "ones":
+                processor = self.ones
+                self.output_dim     += 1
+
+            elif feat == "turns_since":
+                processor = self.get_turns_since
+                self.output_dim     += 8
+
+            elif feat == "liberties":
+                processor = self.get_liberties
+                self.output_dim     += 8
+
+            elif feat == "capture_size":
+                processor = self.get_capture_size
+                self.output_dim     += 8
+
+            elif feat == "self_atari_size":
+                processor = self.get_self_atari_size
+                self.output_dim     += 8
+
+            elif feat == "liberties_after":
+                processor = self.get_liberties_after
+                self.output_dim     += 8
+
+            elif feat == "ladder_capture":
+                processor = self.get_ladder_capture
+                self.output_dim     += 1
+
+            elif feat == "ladder_escape":
+                processor = self.get_ladder_escape
+                self.output_dim     += 1
+
+            elif feat == "sensibleness":
+                processor = self.get_sensibleness
+                self.output_dim     += 1
+
+            elif feat == "zeros":
+                processor = self.zeros
+                self.output_dim     += 1
+
+            elif feat == "legal":
+                processor = self.get_legal
+                self.output_dim     += 1
+
+            elif feat == "response":
+                processor = self.get_response
+                self.output_dim     += 1
+
+            elif feat == "save_atari":
+                processor = self.get_save_atari
+                self.output_dim     += 1
+
+            elif feat == "neighbor":
+                processor = self.get_neighbor
+                self.output_dim     += 2
+
+            elif feat == "nakade":
+                processor = self.get_nakade
+                self.output_dim     += self.pattern_nakade_size
+
+            elif feat == "response_12d":
+                processor = self.get_response_12d
+                self.output_dim     += self.pattern_response_12d_size
+
+            elif feat == "non_response_3x3":
+                processor = self.get_non_response_3x3
+                self.output_dim     += self.pattern_non_response_3x3_size
+
+            elif feat == "color":
+                processor = self.colour
+                self.output_dim     += 1
+            else:
+                raise ValueError( "uknown feature: %s" % feat )
+
+            self.c_processors[ i ] = processor
+
+        if keep_count != self.output_dim:
+            print( "dimension not equal" )
+
+    # deallocate all arrays
+    # arrays created with malloc have to be freed when this instance is destroyed
+    def __dealloc__(self):
+
+        if self.c_processors is not NULL:
+            free( self.c_processors )
 
     ############################################################################
     #   public cdef function                                                   #
     #                                                                          #
     ############################################################################
 
-    cdef np.ndarray[ double, ndim=3 ] generate_tensor( self, GameState state ):
+    @cython.boundscheck( False )
+    @cython.wraparound(  False )
+    cdef np.ndarray[ tensor_type, ndim=4 ] generate_tensor( self, GameState state ):
         """
            Convert a GameState to a Theano-compatible tensor
         """
@@ -462,12 +680,47 @@ cdef class Preprocess:
         cdef char size = state.size
 
         # create complete array now instead of concatenate later
-        cdef np.ndarray[ double, ndim = 2 ] tensor = np.zeros( ( self.output_dim, self.board_locations ) )
+        cdef np.ndarray[ tensor_type, ndim = 2 ] tensor = np.zeros( ( self.output_dim, self.board_locations ), dtype=np.int8 )
         cdef int offSet = 0
+
+        #print str( sys.getrefcount( tensor ) ) + " create"
+
+        # TODO create array with all nextmoves information
 
         for proc in self.processors:
 
             offSet = proc( self, state, tensor, offSet )
+
+        #print str( sys.getrefcount( tensor ) ) + " process"
+
+        # create a singleton 'batch' dimension
+        return tensor.reshape( ( 1, self.output_dim, size, size ) )
+
+
+    #@cython.boundscheck( False )
+    #@cython.wraparound(  False )
+    cdef np.ndarray[ tensor_type, ndim=4 ] generate_tensorf( self, GameState state ):
+        """
+           Convert a GameState to a Theano-compatible tensor
+        """
+
+        cdef preprocess_method ttt
+        cdef int i
+
+        self.board_locations = state.size * state.size
+        cdef char size = state.size
+
+        # create complete array now instead of concatenate later
+        cdef np.ndarray[ tensor_type, ndim = 2 ] tensor = np.zeros( ( self.output_dim, self.board_locations ), dtype=np.int8 )
+        cdef int offSet = 0
+
+
+        # TODO create array with all nextmoves information
+
+        for i in range( len( self.feature_list ) ):
+
+            ttt    = self.c_processors[ i ]
+            offSet = ttt( self, state, tensor, offSet )
 
 
         # create a singleton 'batch' dimension
@@ -487,6 +740,8 @@ cdef class Preprocess:
            Convert a GameState to a Theano-compatible tensor
         """
 
+        # return this causes incorrect reference count....
+
         return self.generate_tensor( state )
 
 
@@ -494,19 +749,13 @@ cdef class Preprocess:
         cdef char size = state.size
         self.board_locations = state.size * state.size
 
-        # create complete array now instead of concatenate later
-        cdef np.ndarray[ double, ndim = 2 ] tensor = np.zeros( ( self.output_dim, self.board_locations ) )
-        cdef int offSet = 0
-
         import time
         t = time.time()
  
         cdef int i
 
         for i in range( amount ):
-            for proc in self.processors:
-
-                offSet = proc( self, state, tensor, 0 )
+            self.generate_tensor( state )
 
         print "proc " + str( time.time() - t )
 
@@ -516,4 +765,12 @@ cdef class Preprocess:
 
         for i in range( amount ):
 
-            self.generate_tensor( state )
+            self.generate_tensorf( state )
+
+
+    def test_game_speed( self, GameState state, list moves ):
+
+        cdef short location
+        for location in moves:
+            state.add_move( location )
+            self.generate_tensorf( state )

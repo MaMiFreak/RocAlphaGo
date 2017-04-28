@@ -9,7 +9,9 @@ from AlphaGo.preprocessing.preprocessing import Preprocess as PreprocessFast
 import AlphaGo.go_slow as goSlow
 from AlphaGo.preprocessing.preprocessing_slow import Preprocess as PreprocessSlow
 
-available = [ "board", "ones", "liberties", "capture_size", "turns_since" ]
+available = [ "board", "ones", "turns_since", "liberties", "capture_size",
+              "self_atari_size", "liberties_after", "ladder_capture",
+              "ladder_escape", "sensibleness", "zeros", "color", "legal" ]
 test      = []
 size      = 5
 
@@ -62,7 +64,7 @@ def test_sgf( filepath, features ):
     global correct
     global countMoves
 
-    currmove = 0
+    currmove = 1
  
     preproces_slow = PreprocessSlow( [ features ] )
     preproces_fast = PreprocessFast( [ features ] )
@@ -89,7 +91,7 @@ def test_sgf( filepath, features ):
             # update state to n+1
 
             state_fast.do_move( move )
-            state_slow.do_move( move, player )
+            state_slow.do_move( move )
 
 
             tensor_slow    = preproces_slow.state_to_tensor( state_slow )
@@ -97,33 +99,36 @@ def test_sgf( filepath, features ):
 
             equal = np.array_equal( tensor_slow, tensor_fast )
             if not equal:
-                #print( str( equal ) + " move " + str( move ) + " " + str( currmove ) )
-                #print( tensor_slow )
-                #print( tensor_fast )
-                #state_fast.printer()
-                #sprint( ( tensor_fast - tensor_slow ) )
-                #break
-                n = 1
+                if False:
+                    print( tensor_slow )
+                    print( tensor_fast )
+                    state_fast.printer()
+                    print( ( tensor_fast - tensor_slow ) )
+                    print( str( equal ) + " move " + str( move ) + " " + str( currmove ) )
+                    print( state_fast.get_player_active_colour() )
+                    break
+                    
             else:
                 correct = correct + 1
 
             countMoves = countMoves + 1
             currmove   = currmove   + 1
 
-available = [ "board", "ones", "liberties", "capture_size", "turns_since" ]
-#available = [ "turns_since" ]
+#available = [ "sensibleness", "legal" ] 
 sgfFiles  = [ "tests/test_data/sgf/20160312-Lee-Sedol-vs-AlphaGo.sgf",
               "tests/test_data/sgf/20160313-AlphaGo-vs-Lee-Sedol.sgf",
               "tests/test_data/sgf/AlphaGo-vs-Lee-Sedol-20160310.sgf",
               "tests/test_data/sgf/Lee-Sedol-vs-AlphaGo-20160309.sgf",
               "tests/test_data/sgf/Lee-Sedol-vs-AlphaGo-20160315.sgf" ]
-#sgfFiles  = [ "tests/test_data/sgf/20160312-Lee-Sedol-vs-AlphaGo.sgf" ]
+#sgfFiles  = [ "tests/test_data/sgf/Lee-Sedol-vs-AlphaGo-20160315.sgf" ]
 
 for feature in available:
+
+    correct = 0
+    countMoves = 0
+    
     for sgfFile in sgfFiles:
 
-        correct = 0
-        countMoves = 0
         test_sgf( sgfFile, feature )
-    print( feature + " - moves: " + str( countMoves ) + " correct: " + str( correct ) )
+    print( "moves: " + str( countMoves ) + " correct: " + str( correct ) + " - " + feature )
     print( "" )
