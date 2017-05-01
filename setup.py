@@ -1,4 +1,5 @@
 import numpy
+import os
 from distutils.core import setup
 from Cython.Build import cythonize
 
@@ -8,7 +9,8 @@ setup(
     # list with files to be cythonized
     ext_modules = cythonize(["AlphaGo/go.pyx", "AlphaGo/preprocessing/preprocessing.pyx"]),
     # include numpy
-    include_dirs=[numpy.get_include()]
+    include_dirs=[numpy.get_include(),
+                  os.path.join(numpy.get_include(), 'numpy')]
 )
 
 # run setup with command

@@ -93,6 +93,9 @@ cdef class GameState:
     cdef long generate_12d_hash( self, short centre )
     cdef long generate_3x3_hash( self, short centre )
     cdef Group get_group_after( self, short location )
+    cdef bint is_ladder_capture_move( self, GameState state, short location_group, dict capture, short location, int maxDepth, char colour_group, char colour_chase )
+    cdef bint is_ladder_escape_move( self, GameState state, short location_group, dict capture, short location, int maxDepth, char colour_group, char colour_chase )
+    cdef char get_winner_colour( self, int komi )
 
     ############################################################################
     #   public cdef functions used by preprocessing                            #
@@ -102,16 +105,12 @@ cdef class GameState:
     cdef long get_hash_12d( self, short centre )
     cdef long get_hash_3x3( self, short location )
     cdef char get_board_feature( self, short location )
-    cdef bint is_group_in_ladder( self, char  *board, LadderGroup group, short location, int maxDepth, char group_colour, char chase_colour )
-    cdef bint can_group_escape_ladder( self, char  *board, LadderGroup group, short location, int maxDepth, char group_colour, char chase_colour )
+    cdef list get_groups_after( self )
     cdef char is_ladder_capture( self, Group group, short location, int maxDepth )
     cdef char is_ladder_escape( self, Group group, short location, int maxDepth )
-    cdef bint is_true_eye( self, short location, dict eyes )
+    cdef bint is_true_eye( self, short location, dict eyes, char owner )
     cdef list get_sensible_moves( self )
-    cdef char is_sensible( self, location )
-    cdef short get_liberties_after( self, short location, short max )
     cdef short get_capture_size( self, short location, short max )
-    cdef short get_self_atari_size( self, short location, short max )
 
     ############################################################################
     #   public cdef functions used for game play                               #
@@ -120,7 +119,6 @@ cdef class GameState:
 
     cdef void add_move( self, short location )
     cdef GameState new_state_add_move( self, short location )
-    cdef char get_winner_colour( self, char komi )
 
     ############################################################################
     #   public def functions used for game play (Python)                       #

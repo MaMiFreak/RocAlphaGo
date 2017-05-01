@@ -296,4 +296,8 @@ class Preprocess(object):
 
         # concatenate along feature dimension then add in a singleton 'batch' dimension
         f, s = self.output_dim, state.size
-        return np.concatenate(feat_tensors).reshape((1, f, s, s))
+        
+        tensor = np.concatenate(feat_tensors).reshape((1, f, s, s))
+        tensor = tensor.astype(np.int8)
+        
+        return tensor

@@ -4,6 +4,8 @@ np.set_printoptions(threshold=np.nan)
 import time
 import sys
 
+import gc
+
 import sgf
 
 import AlphaGo.go as goFast
@@ -12,7 +14,7 @@ from AlphaGo.preprocessing.preprocessing import Preprocess as PreprocessFast
 available = [ "board", "ones", "turns_since", "liberties", "capture_size",
               "self_atari_size", "liberties_after", "ladder_capture",
               "ladder_escape", "sensibleness", "zeros", "color", "legal" ]
-# available = [ "board" ]
+#available = [ "ladder_escape" ]
 
 sgfFiles  = [ "tests/test_data/sgf/20160312-Lee-Sedol-vs-AlphaGo.sgf",
               "tests/test_data/sgf/20160313-AlphaGo-vs-Lee-Sedol.sgf",
@@ -62,6 +64,7 @@ def get_moves( filepath ):
 count = 0
 correct = 0
 
+print( available )
 # 
 #for feature in available:
 start = time.time()
@@ -79,7 +82,7 @@ for sgfFile in sgfFiles:
         state_root.do_move( moves[ i ] )
 
         tensor_root = preproces.state_to_tensor( state_root )
-
+        
         # print( tensor_root.nbytes )
         # print( tensor_root.shape )
         # print sys.getrefcount( tensor_root )
