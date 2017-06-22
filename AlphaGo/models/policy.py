@@ -3,9 +3,10 @@ from keras.layers import Input, BatchNormalization, Conv2D
 from keras.layers.merge import add
 from keras.layers.core import Activation, Flatten
 from AlphaGo.util import flatten_idx
+from AlphaGo.util import save_gamestate_to_sgf
 from AlphaGo.models.nn_util import Bias, NeuralNetBase, neuralnet
 import numpy as np
-
+import datetime
 
 @neuralnet
 class CNNPolicy(NeuralNetBase):
@@ -39,8 +40,18 @@ class CNNPolicy(NeuralNetBase):
         state_size = states[0].get_size()
         if not all([st.get_size() == state_size for st in states]):
             raise ValueError("all states must have the same size")
+
+        print( "Start preprocess" )
+        time_preprocess = datetime.datetime.now()
+
+        all_preprocesses = []
+        for s in states:
+            save_gamestate_to_sgf(s, "", "latests_sgf.sgf" )
+            all_preprocesses.append( self.preprocessor.state_to_tensor(s) )
+
+        print( "Finish preprocess: " + str( datetime.datetime.now() - time_preprocess ) )
         # concatenate together all one-hot encoded states along the 'batch' dimension
-        nn_input = np.concatenate([self.preprocessor.state_to_tensor(s) for s in states], axis=0)
+        nn_input = np.concatenate(all_preprocesses, axis=0)
         # pass all input through the network at once (backend makes use of
         # batches if len(states) is large)
         network_output = self.forward(nn_input)

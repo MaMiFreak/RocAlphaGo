@@ -1972,7 +1972,7 @@ cdef class GameState:
             self.player_opponent = (_BLACK if self.player_current == _WHITE else _WHITE)
 
             # legal moves have to be recalculated
-            self.ko = _PASS
+            # self.ko = _PASS
             self.set_moves_legal_list(self.moves_legal)
             return
 
