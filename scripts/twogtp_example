@@ -1,0 +1,12 @@
+
+# use twogtp to let two gtp engines play eachother
+gogui-twogtp -black "python player_policy.py 40" -white "python player_policy.py 130" -auto -sgffile old_vs_new/old_vs_new -games 400 -alternate -referee "gnugo --mode gtp --chinese-rules" -komi 7.5
+
+# leela example, settings can be changed
+./leela/leela_0100_linux_x64 --gtp -p 100 --noponder
+
+# pachi example, settings can be changed
+pachi -t =15000 -f book.dat pondering=0,pass_all_alive
+
+# create html with all data
+gogui-twogtp -analyze old_vs_new/v62/old_vs_new.dat -force

@@ -817,6 +817,13 @@ cdef class Preprocess:
 
         return self.generate_tensor(state)
 
+    def state_to_single_tensor(self, GameState state):
+        """
+           Convert a GameState to a Theano-compatible tensor
+           without batch dimension
+        """
+
+        return self.generate_tensor(state).reshape((self.output_dim, self.size, self.size))
 
     def get_output_dimension(self):
         """

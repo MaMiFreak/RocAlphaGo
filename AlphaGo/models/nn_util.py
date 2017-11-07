@@ -25,7 +25,7 @@ class NeuralNetBase(object):
             "board": 19
         }
         defaults.update(kwargs)
-        self.preprocessor = Preprocess(feature_list, size=defaults["board"])
+        self.preprocessor = self.get_preprocessor(feature_list, defaults["board"])
         kwargs["input_dim"] = self.preprocessor.get_output_dimension()
 
         if kwargs.get('init_network', True):
@@ -34,6 +34,13 @@ class NeuralNetBase(object):
             self.model = self.__class__.create_network(**kwargs)
             # self.forward is a lambda function wrapping a Keras function
             self.forward = self._model_forward()
+
+    def get_preprocessor(self, feature_list, board_size):
+        """
+           return preprocessor
+        """
+
+        return Preprocess(feature_list, size=board_size)
 
     def _model_forward(self):
         """Construct a function using the current keras backend that, when given a batch

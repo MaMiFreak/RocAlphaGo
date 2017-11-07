@@ -2048,6 +2048,77 @@ cdef class GameState:
     ############################################################################
 
 
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def copy_and_move_at_location(self, location):
+        """
+           get a copy of this Game state and
+           Play stone at location ( location has to be in range board_size +1 (+1 for pass) )  
+        """
+
+        copy = GameState(copyState = self)
+        copy.move_at_location( location )
+
+        return copy
+
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def move_at_location( self, location ):
+        """
+           Play stone at location ( location has to be in range board_size +1 (+1 for pass) )  
+        """
+
+        if location == self.board_size:
+
+            # pass
+            locations_list_add_location_increment(self.moves_history, _PASS)
+
+            if self.player_opponent == _BLACK:
+
+                self.passes_black += 1
+            else:
+
+                self.passes_white += 1
+
+            # change player colour
+            self.player_current = self.player_opponent
+            self.player_opponent = (_BLACK if self.player_current == _WHITE else _WHITE)
+
+            # legal moves have to be recalculated
+            self.ko = _PASS
+            self.set_moves_legal_list(self.moves_legal)
+            return
+
+        # check if move is legal
+        if not self.is_legal_move_superko(location, self.board_groups, self.ko):
+
+            raise IllegalMove(str(location))
+
+        # add move
+        self.add_move(location)
+
+        return True
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def is_legal_location( self, location ):
+        """
+           Check if a move at location is legal ( location has to be in range board_size +1 (+1 for pass) )  
+        """
+
+        if location == self.board_size:
+            # pass
+            return True
+
+        if self.is_legal_move_superko(location, self.board_groups, self.ko):
+
+            return True
+
+        return False
+
+
     @cython.boundscheck(False)
     @cython.wraparound(False)
     def do_move(self, action, color=None):
@@ -2123,6 +2194,37 @@ cdef class GameState:
         for i in range(moves_list.count):
 
             moves.append(self.calculate_tuple_location(moves_list.locations[ i ]))
+
+        if not include_eyes:
+
+            # free sensible_moves
+            locations_list_destroy(moves_list)
+
+        return moves
+
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    def get_legal_locations(self, include_eyes = True ):
+        """
+           return a list with all legal moves (in/excluding eyes)
+        """
+
+        cdef int  i
+        cdef list moves = []
+        cdef Locations_List* moves_list
+
+        if include_eyes:
+
+            moves_list = self.moves_legal
+        else:
+
+            moves_list = self.get_sensible_moves()
+
+
+        for i in range(moves_list.count):
+
+            moves.append( moves_list.locations[ i ] )
 
         if not include_eyes:
 
